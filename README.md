@@ -1,12 +1,26 @@
 # UnispectDMAPlugin
 
-This is a plugin for Unispect!
+This is a plugin for Unispect, using the MemProcFS (PciLeech) Library.
+
+For a Custom Compiled Version of Unispect with this Plugin *Built-In*, See [Unispect-DMA](https://github.com/imerzan/Unispect-DMA).
 
 ## What can you do with it?
-Read memory through your FPGA board without having to run Unispect on your main computer! It is as simple as that
+Dump Unity Mono Assemblies with Unispect from a second computer, using an FPGA DMA Card.
 
-## Important
-- You need to have all the files from MemprocFS in the directory where Unispect.exe lies. You also need to have the FTDI driver dll in that directory (FTD3XX.dll)
+## Notes on this fork
+- Place the following files into the Project Folder prior to building:
+  - vmm.dll
+  - leechcore.dll
+  - FTD3XX.dll
+  - Unispect.exe
+  - symsrv.dll
+  - dbghelp.dll
+- You can download most of the above binaries at:
+  - https://github.com/Razchek/Unispect/releases
+  - https://github.com/ufrisk/MemProcFS/releases
+  - https://ftdichip.com/drivers/d3xx-drivers/
+- Build the solution for x64. Place all build files into the *Plugins* folder in your Unispect Directory.
+- *(Optional)* If you have a Memory Map place it in the Unispect.exe directory (one level up from Plugins).
+  - Memory Map should be named *mmap.txt*
 
-
-### Have fun
+### Have fun!
