@@ -4,7 +4,7 @@ This is a plugin for Unispect, using the MemProcFS (PciLeech) Library.
 
 **NOTE ON THIS FORK:** The original Unispect branch by Razchek has a bug where Memory Plugins are not disposed after dumping. This causes the FPGA connection to remain open until the program is closed again. This may cause problems with running another dump, OR using the FPGA in other programs. I have fixed this in my own fork of Unispect: https://github.com/imerzan/Unispect
 
-Specifically in this commit: https://github.com/imerzan/Unispect/commit/97193d899be638dfbc9e4f1ea28c7a8fc6bd6dbb
+Specifically in this commit: https://github.com/imerzan/Unispect/commit/0631aba2d73c39b87ad83f10f9463137f36cdcaa
 
 ## What can you do with it?
 Dump Unity Mono Assemblies with Unispect from a second computer, using an FPGA DMA Card.
