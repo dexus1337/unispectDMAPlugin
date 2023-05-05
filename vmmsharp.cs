@@ -551,6 +551,15 @@ namespace vmmsharp
             return new VmmScatter(hS);
         }
 
+        /// <summary>
+        /// Customized for Unispect.
+        /// Modified by Frost.
+        /// </summary>
+        /// <param name="pid">Process ID to read from.</param>
+        /// <param name="qwA">Address to read from.</param>
+        /// <param name="cb">Number of bytes to read.</param>
+        /// <param name="flags">Read flags.</param>
+        /// <returns>Byte array containing memory read.</returns>
         public unsafe byte[] MemRead(uint pid, ulong qwA, uint cb, uint flags = 0)
         {
             uint cbRead;
@@ -561,10 +570,6 @@ namespace vmmsharp
                 {
                     return null;
                 }
-            }
-            if (cbRead != cb)
-            {
-                Array.Resize<byte>(ref data, (int)cbRead);
             }
             return data;
         }
