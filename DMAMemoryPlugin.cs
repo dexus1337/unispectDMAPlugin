@@ -8,38 +8,27 @@ namespace unispectDMAPlugin
     [UnispectPlugin]
     public sealed class DMAMemoryPlugin : MemoryProxy
     {
-        private const string MemMapPath = @"mmap.txt";
-        // Using a static field since Unispect does not Dispose the plugin after each operation.
-        // However it will attempt to re-run the constructor each time (leading to an FPGA Init error).
-        // Using a static field will save the plugin state between operations.
-        // Uses a lock to prevent possible (but unlikely) race conditions.
-        private static readonly object _sync = new();
-        private static Vmm _vmm;
-        private static bool _loaded = false;
+        private const string MemMapPath = "mmap.txt";
+        private readonly Vmm _vmm;
         private uint _pid;
 
         public DMAMemoryPlugin()
         {
-            lock (_sync)
+            try
             {
-                try
+                Log.Add("[DMA] Plugin Starting...");
+                if (File.Exists(MemMapPath))
                 {
-                    if (_loaded) return;
-                    Log.Add("[DMA] Plugin Starting...");
-                    if (File.Exists(MemMapPath))
-                    {
-                        Log.Add("[DMA] Memory Map Found!");
-                        _vmm = new Vmm("-printf", "-v", "-device", "FPGA", "-memmap", MemMapPath, "-waitinitialize");
-                    }
-                    else
-                        _vmm = new Vmm("-printf", "-v", "-device", "FPGA", "-waitinitialize");
-                    _loaded = true;
-                    Log.Add("[DMA] Plugin Loaded!");
+                    Log.Add("[DMA] Memory Map Found!");
+                    _vmm = new Vmm("-device", "FPGA", "-memmap", MemMapPath, "-waitinitialize");
                 }
-                catch (Exception ex)
-                {
-                    throw new DMAMemoryPluginException("[DMA] ERROR Initializing FPGA", ex);
-                }
+                else
+                    _vmm = new Vmm("-device", "FPGA", "-waitinitialize");
+                Log.Add("[DMA] Plugin Loaded!");
+            }
+            catch (Exception ex)
+            {
+                throw new DMAMemoryPluginException("[DMA] ERROR Initializing FPGA", ex);
             }
         }
 
@@ -89,15 +78,17 @@ namespace unispectDMAPlugin
             }
         }
 
+        #region IDisposable
+        private bool _disposed;
         public override void Dispose()
         {
-            lock (_sync)
+            if (!_disposed)
             {
                 Log.Add("[DMA] Dispose");
-                _vmm?.Dispose(); // Close FPGA Connection and Release Resources
-                _vmm = null;
-                _loaded = false;
+                _vmm.Dispose();
+                _disposed = true;
             }
         }
+        #endregion
     }
 }
