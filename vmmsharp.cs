@@ -2,6 +2,8 @@
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 
 /*  
  *  C# API wrapper 'vmmsharp' for MemProcFS 'vmm.dll' and LeechCore 'leechcore.dll' APIs.
@@ -11,13 +13,12 @@ using System.Collections.Generic;
  *  Please consult the C/C++ header files vmmdll.h and leechcore.h for information about
  *  parameters and API usage.
  *  
- *  (c) Ulf Frisk, 2020-2023
+ *  (c) Ulf Frisk, 2020-2024
  *  Author: Ulf Frisk, pcileech@frizk.net
  *  
- *  Version 5.4
+ *  Version 5.9
  *  
  */
-
 namespace vmmsharp
 {
     public struct MEM_SCATTER
@@ -27,81 +28,119 @@ namespace vmmsharp
         public byte[] pb;
     }
 
-    public static class lc
+    // LeechCore public API:
+    public sealed class LeechCore : IDisposable
     {
-        public static ulong OPT_CORE_PRINTF_ENABLE =            0x4000000100000000;
-        public static ulong OPT_CORE_VERBOSE =                  0x4000000200000000;
-        public static ulong OPT_CORE_VERBOSE_EXTRA =            0x4000000300000000;
-        public static ulong OPT_CORE_VERBOSE_EXTRA_TLP =        0x4000000400000000;
-        public static ulong OPT_CORE_VERSION_MAJOR =            0x4000000500000000;
-        public static ulong OPT_CORE_VERSION_MINOR =            0x4000000600000000;
-        public static ulong OPT_CORE_VERSION_REVISION =         0x4000000700000000;
-        public static ulong OPT_CORE_ADDR_MAX =                 0x1000000800000000;
-        public static ulong VMMDLL_OPT_CORE_LEECHCORE_HANDLE =  0x4000001000000000;
+        //---------------------------------------------------------------------
+        // LEECHCORE: PUBLIC API CONSTANTS BELOW:
+        //---------------------------------------------------------------------
+        public const uint LC_CONFIG_VERSION = 0xc0fd0002;
+        public const uint LC_CONFIG_ERRORINFO_VERSION = 0xc0fe0002;
 
-        public static ulong OPT_MEMORYINFO_VALID =              0x0200000100000000;
-        public static ulong OPT_MEMORYINFO_FLAG_32BIT =         0x0200000300000000;
-        public static ulong OPT_MEMORYINFO_FLAG_PAE =           0x0200000400000000;
-        public static ulong OPT_MEMORYINFO_OS_VERSION_MINOR =   0x0200000500000000;
-        public static ulong OPT_MEMORYINFO_OS_VERSION_MAJOR =   0x0200000600000000;
-        public static ulong OPT_MEMORYINFO_OS_DTB =             0x0200000700000000;
-        public static ulong OPT_MEMORYINFO_OS_PFN =             0x0200000800000000;
-        public static ulong OPT_MEMORYINFO_OS_PsLoadedModuleList = 0x0200000900000000;
-        public static ulong OPT_MEMORYINFO_OS_PsActiveProcessHead = 0x0200000a00000000;
-        public static ulong OPT_MEMORYINFO_OS_MACHINE_IMAGE_TP = 0x0200000b00000000;
-        public static ulong OPT_MEMORYINFO_OS_NUM_PROCESSORS =  0x0200000c00000000;
-        public static ulong OPT_MEMORYINFO_OS_SYSTEMTIME =      0x0200000d00000000;
-        public static ulong OPT_MEMORYINFO_OS_UPTIME =          0x0200000e00000000;
-        public static ulong OPT_MEMORYINFO_OS_KERNELBASE =      0x0200000f00000000;
-        public static ulong OPT_MEMORYINFO_OS_KERNELHINT =      0x0200001000000000;
-        public static ulong OPT_MEMORYINFO_OS_KdDebuggerDataBlock = 0x0200001100000000;
+        public const uint LC_CONFIG_PRINTF_ENABLED = 0x01;
+        public const uint LC_CONFIG_PRINTF_V = 0x02;
+        public const uint LC_CONFIG_PRINTF_VV = 0x04;
+        public const uint LC_CONFIG_PRINTF_VVV = 0x08;
 
-        public static ulong OPT_FPGA_PROBE_MAXPAGES =           0x0300000100000000;
-        public static ulong OPT_FPGA_MAX_SIZE_RX =              0x0300000300000000;
-        public static ulong OPT_FPGA_MAX_SIZE_TX =              0x0300000400000000;
-        public static ulong OPT_FPGA_DELAY_PROBE_READ =         0x0300000500000000;
-        public static ulong OPT_FPGA_DELAY_PROBE_WRITE =        0x0300000600000000;
-        public static ulong OPT_FPGA_DELAY_WRITE =              0x0300000700000000;
-        public static ulong OPT_FPGA_DELAY_READ =               0x0300000800000000;
-        public static ulong OPT_FPGA_RETRY_ON_ERROR =           0x0300000900000000;
-        public static ulong OPT_FPGA_DEVICE_ID =                0x0300008000000000;
-        public static ulong OPT_FPGA_FPGA_ID =                  0x0300008100000000;
-        public static ulong OPT_FPGA_VERSION_MAJOR =            0x0300008200000000;
-        public static ulong OPT_FPGA_VERSION_MINOR =            0x0300008300000000;
-        public static ulong OPT_FPGA_ALGO_TINY =                0x0300008400000000;
-        public static ulong OPT_FPGA_ALGO_SYNCHRONOUS =         0x0300008500000000;
+        public const ulong LC_OPT_CORE_PRINTF_ENABLE = 0x4000000100000000;  // RW
+        public const ulong LC_OPT_CORE_VERBOSE = 0x4000000200000000;  // RW
+        public const ulong LC_OPT_CORE_VERBOSE_EXTRA = 0x4000000300000000;  // RW
+        public const ulong LC_OPT_CORE_VERBOSE_EXTRA_TLP = 0x4000000400000000;  // RW
+        public const ulong LC_OPT_CORE_VERSION_MAJOR = 0x4000000500000000;  // R
+        public const ulong LC_OPT_CORE_VERSION_MINOR = 0x4000000600000000;  // R
+        public const ulong LC_OPT_CORE_VERSION_REVISION = 0x4000000700000000;  // R
+        public const ulong LC_OPT_CORE_ADDR_MAX = 0x1000000800000000;  // R
+        public const ulong LC_OPT_CORE_STATISTICS_CALL_COUNT = 0x4000000900000000;  // R [lo-dword: LC_STATISTICS_ID_*]
+        public const ulong LC_OPT_CORE_STATISTICS_CALL_TIME = 0x4000000a00000000;  // R [lo-dword: LC_STATISTICS_ID_*]
+        public const ulong LC_OPT_CORE_VOLATILE = 0x1000000b00000000;  // R
+        public const ulong LC_OPT_CORE_READONLY = 0x1000000c00000000;  // R
 
-        public static ulong CMD_FPGA_WRITE_TLP =                0x0000010100000000;
-        public static ulong CMD_FPGA_LISTEN_TLP =               0x0000010200000000;
-        public static ulong CMD_FPGA_PCIECFGSPACE =             0x0000010300000000;
-        public static ulong CMD_FPGA_CFGREGPCIE =               0x0000010400000000;
-        public static ulong CMD_FPGA_CFGREGCFG =                0x0000010500000000;
-        public static ulong CMD_FPGA_CFGREGDRP =                0x0000010600000000;
-        public static ulong CMD_FPGA_CFGREGCFG_MARKWR =         0x0000010700000000;
-        public static ulong CMD_FPGA_CFGREGPCIE_MARKWR =        0x0000010800000000;
-        public static ulong CMD_FPGA_PCIECFGSPACE_WR =          0x0000010900000000;
-        public static ulong CMD_FPGA_CFGREG_DEBUGPRINT =        0x0000010a00000000;
-        public static ulong CMD_FPGA_PROBE =                    0x0000010b00000000;
+        public const ulong LC_OPT_MEMORYINFO_VALID = 0x0200000100000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_FLAG_32BIT = 0x0200000300000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_FLAG_PAE = 0x0200000400000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_ARCH = 0x0200001200000000;  // R - LC_ARCH_TP
+        public const ulong LC_OPT_MEMORYINFO_OS_VERSION_MINOR = 0x0200000500000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_VERSION_MAJOR = 0x0200000600000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_DTB = 0x0200000700000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_PFN = 0x0200000800000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_PsLoadedModuleList = 0x0200000900000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_PsActiveProcessHead = 0x0200000a00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_MACHINE_IMAGE_TP = 0x0200000b00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_NUM_PROCESSORS = 0x0200000c00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_SYSTEMTIME = 0x0200000d00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_UPTIME = 0x0200000e00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_KERNELBASE = 0x0200000f00000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_KERNELHINT = 0x0200001000000000;  // R
+        public const ulong LC_OPT_MEMORYINFO_OS_KdDebuggerDataBlock = 0x0200001100000000;  // R
 
-        public static ulong CMD_FILE_DUMPHEADER_GET =           0x0000020100000000;
+        public const ulong LC_OPT_FPGA_PROBE_MAXPAGES = 0x0300000100000000;  // RW
+        public const ulong LC_OPT_FPGA_MAX_SIZE_RX = 0x0300000300000000;  // RW
+        public const ulong LC_OPT_FPGA_MAX_SIZE_TX = 0x0300000400000000;  // RW
+        public const ulong LC_OPT_FPGA_DELAY_PROBE_READ = 0x0300000500000000;  // RW - uS
+        public const ulong LC_OPT_FPGA_DELAY_PROBE_WRITE = 0x0300000600000000;  // RW - uS
+        public const ulong LC_OPT_FPGA_DELAY_WRITE = 0x0300000700000000;  // RW - uS
+        public const ulong LC_OPT_FPGA_DELAY_READ = 0x0300000800000000;  // RW - uS
+        public const ulong LC_OPT_FPGA_RETRY_ON_ERROR = 0x0300000900000000;  // RW
+        public const ulong LC_OPT_FPGA_DEVICE_ID = 0x0300008000000000;  // RW - bus:dev:fn (ex: 04:00.0 === 0x0400).
+        public const ulong LC_OPT_FPGA_FPGA_ID = 0x0300008100000000;  // R
+        public const ulong LC_OPT_FPGA_VERSION_MAJOR = 0x0300008200000000;  // R
+        public const ulong LC_OPT_FPGA_VERSION_MINOR = 0x0300008300000000;  // R
+        public const ulong LC_OPT_FPGA_ALGO_TINY = 0x0300008400000000;  // RW - 1/0 use tiny 128-byte/tlp read algorithm.
+        public const ulong LC_OPT_FPGA_ALGO_SYNCHRONOUS = 0x0300008500000000;  // RW - 1/0 use synchronous (old) read algorithm.
+        public const ulong LC_OPT_FPGA_CFGSPACE_XILINX = 0x0300008600000000;  // RW - [lo-dword: register address in bytes] [bytes: 0-3: data, 4-7: byte_enable(if wr/set); top bit = cfg_mgmt_wr_rw1c_as_rw]
+        public const ulong LC_OPT_FPGA_TLP_READ_CB_WITHINFO = 0x0300009000000000;  // RW - 1/0 call TLP read callback with additional string info in szInfo
+        public const ulong LC_OPT_FPGA_TLP_READ_CB_FILTERCPL = 0x0300009100000000;  // RW - 1/0 call TLP read callback with memory read completions from read calls filtered
 
-        public static ulong CMD_STATISTICS_GET =                0x4000010000000000;
-        public static ulong CMD_MEMMAP_GET =                    0x4000020000000000;
-        public static ulong CMD_MEMMAP_SET =                    0x4000030000000000;
+        public const ulong LC_CMD_FPGA_PCIECFGSPACE = 0x0000010300000000;  // R
+        public const ulong LC_CMD_FPGA_CFGREGPCIE = 0x0000010400000000;  // RW - [lo-dword: register address]
+        public const ulong LC_CMD_FPGA_CFGREGCFG = 0x0000010500000000;  // RW - [lo-dword: register address]
+        public const ulong LC_CMD_FPGA_CFGREGDRP = 0x0000010600000000;  // RW - [lo-dword: register address]
+        public const ulong LC_CMD_FPGA_CFGREGCFG_MARKWR = 0x0000010700000000;  // W  - write with mask [lo-dword: register address] [bytes: 0-1: data, 2-3: mask]
+        public const ulong LC_CMD_FPGA_CFGREGPCIE_MARKWR = 0x0000010800000000;  // W  - write with mask [lo-dword: register address] [bytes: 0-1: data, 2-3: mask]
+        public const ulong LC_CMD_FPGA_CFGREG_DEBUGPRINT = 0x0000010a00000000;  // N/A
+        public const ulong LC_CMD_FPGA_PROBE = 0x0000010b00000000;  // RW
+        public const ulong LC_CMD_FPGA_CFGSPACE_SHADOW_RD = 0x0000010c00000000;  // R
+        public const ulong LC_CMD_FPGA_CFGSPACE_SHADOW_WR = 0x0000010d00000000;  // W  - [lo-dword: config space write base address]
+        public const ulong LC_CMD_FPGA_TLP_WRITE_SINGLE = 0x0000011000000000;  // W  - write single tlp BYTE:s
+        public const ulong LC_CMD_FPGA_TLP_WRITE_MULTIPLE = 0x0000011100000000;  // W  - write multiple LC_TLP:s
+        public const ulong LC_CMD_FPGA_TLP_TOSTRING = 0x0000011200000000;  // RW - convert single TLP to LPSTR; *pcbDataOut includes NULL terminator.
 
-        public static ulong CMD_AGENT_EXEC_PYTHON =             0x8000000100000000;
-        public static ulong CMD_AGENT_EXIT_PROCESS =            0x8000000200000000;
+        public const ulong LC_CMD_FPGA_TLP_CONTEXT = 0x2000011400000000;  // W - set/unset TLP user-defined context to be passed to callback function. (pbDataIn == LPVOID user context). [not remote].
+        public const ulong LC_CMD_FPGA_TLP_CONTEXT_RD = 0x2000011b00000000;  // R - get TLP user-defined context to be passed to callback function. [not remote].
+        public const ulong LC_CMD_FPGA_TLP_FUNCTION_CALLBACK = 0x2000011500000000;  // W - set/unset TLP callback function (pbDataIn == PLC_TLP_CALLBACK). [not remote].
+        public const ulong LC_CMD_FPGA_TLP_FUNCTION_CALLBACK_RD = 0x2000011c00000000;  // R - get TLP callback function. [not remote].
+        public const ulong LC_CMD_FPGA_BAR_CONTEXT = 0x2000011800000000;  // W - set/unset BAR user-defined context to be passed to callback function. (pbDataIn == LPVOID user context). [not remote].
+        public const ulong LC_CMD_FPGA_BAR_CONTEXT_RD = 0x2000011d00000000;  // R - get BAR user-defined context to be passed to callback function. [not remote].
+        public const ulong LC_CMD_FPGA_BAR_FUNCTION_CALLBACK = 0x2000011900000000;  // W - set/unset BAR callback function (pbDataIn == PLC_BAR_CALLBACK). [not remote].
+        public const ulong LC_CMD_FPGA_BAR_FUNCTION_CALLBACK_RD = 0x2000011e00000000;  // R - get BAR callback function. [not remote].
+        public const ulong LC_CMD_FPGA_BAR_INFO = 0x0000011a00000000;  // R - get BAR info (pbDataOut == LC_BAR_INFO[6]).
 
-        public static uint CONFIG_VERSION =                     0xc0fd0002;
-        public static uint CONFIG_ERRORINFO_VERSION =           0xc0fe0001;
+        public const ulong LC_CMD_FILE_DUMPHEADER_GET = 0x0000020100000000;  // R
 
-        public static uint CONFIG_PRINTF_ENABLED =              0x01;
-        public static uint CONFIG_PRINTF_V =                    0x02;
-        public static uint CONFIG_PRINTF_VV =                   0x04;
-        public static uint CONFIG_PRINTF_VVV =                  0x08;
+        public const ulong LC_CMD_STATISTICS_GET = 0x4000010000000000;  // R
+        public const ulong LC_CMD_MEMMAP_GET = 0x4000020000000000;  // R  - MEMMAP as LPSTR
+        public const ulong LC_CMD_MEMMAP_SET = 0x4000030000000000;  // W  - MEMMAP as LPSTR
+        public const ulong LC_CMD_MEMMAP_GET_STRUCT = 0x4000040000000000;  // R  - MEMMAP as LC_MEMMAP_ENTRY[]
+        public const ulong LC_CMD_MEMMAP_SET_STRUCT = 0x4000050000000000;  // W  - MEMMAP as LC_MEMMAP_ENTRY[]
+
+        public const ulong LC_CMD_AGENT_EXEC_PYTHON = 0x8000000100000000;  // RW - [lo-dword: optional timeout in ms]
+        public const ulong LC_CMD_AGENT_EXIT_PROCESS = 0x8000000200000000;  //    - [lo-dword: process exit code]
+        public const ulong LC_CMD_AGENT_VFS_LIST = 0x8000000300000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_READ = 0x8000000400000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_WRITE = 0x8000000500000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_OPT_GET = 0x8000000600000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_OPT_SET = 0x8000000700000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_INITIALIZE = 0x8000000800000000;  // RW
+        public const ulong LC_CMD_AGENT_VFS_CONSOLE = 0x8000000900000000;  // RW
+
+
+
+        //---------------------------------------------------------------------
+        // LEECHCORE: CORE FUNCTIONALITY BELOW:
+        //---------------------------------------------------------------------
 
         [System.Runtime.InteropServices.StructLayoutAttribute(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        public struct CONFIG
+        public struct LC_CONFIG
         {
             public uint dwVersion;
             public uint dwPrintfVerbosity;
@@ -116,74 +155,238 @@ namespace vmmsharp
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDeviceName;
         }
 
-        public struct CONFIG_ERRORINFO
+        public struct LC_CONFIG_ERRORINFO
         {
             public bool fValid;
             public bool fUserInputRequest;
             public string strUserText;
         }
 
-        public static unsafe ulong Create(ref CONFIG pLcCreateConfig, out CONFIG_ERRORINFO ConfigErrorInfo)
+        private bool disposed = false;
+        private IntPtr hLC = IntPtr.Zero;
+
+        // private zero-argument constructor - do not use!
+        private LeechCore()
+        {
+        }
+
+        private LeechCore(IntPtr hLC)
+        {
+            this.hLC = hLC;
+        }
+
+        // Factory method creating a new LeechCore object taking a LC_CONFIG structure
+        // containing the configuration and optionally return a LC_CONFIG_ERRORINFO
+        // structure containing any error.
+        // Use this when you wish to gain greater control of creating LeechCore objects.
+        public static unsafe LeechCore CreateFromConfig(ref LC_CONFIG pLcCreateConfig, out LC_CONFIG_ERRORINFO ConfigErrorInfo)
         {
             IntPtr pLcErrorInfo;
-            int cbERROR_INFO = System.Runtime.InteropServices.Marshal.SizeOf(typeof(lci.LC_CONFIG_ERRORINFO));
-            ulong hLC = lci.LcCreateEx(ref pLcCreateConfig, out pLcErrorInfo);
-            long vaLcCreateErrorInfo = pLcErrorInfo.ToInt64();
-            ConfigErrorInfo = new CONFIG_ERRORINFO();
+            int cbERROR_INFO = System.Runtime.InteropServices.Marshal.SizeOf<lci.LC_CONFIG_ERRORINFO>();
+            IntPtr hLC = lci.LcCreateEx(ref pLcCreateConfig, out pLcErrorInfo);
+            ConfigErrorInfo = new LC_CONFIG_ERRORINFO();
             ConfigErrorInfo.strUserText = "";
-            if (vaLcCreateErrorInfo == 0) {
-                return hLC;
-            }
-            lci.LC_CONFIG_ERRORINFO e = Marshal.PtrToStructure<lci.LC_CONFIG_ERRORINFO>(pLcErrorInfo);
-            if(e.dwVersion == CONFIG_ERRORINFO_VERSION)
+            if ((pLcErrorInfo != IntPtr.Zero) && (hLC != IntPtr.Zero))
             {
-                ConfigErrorInfo.fValid = true;
-                ConfigErrorInfo.fUserInputRequest = e.fUserInputRequest;
-                if(e.cwszUserText > 0)
+                return new LeechCore(hLC);
+            }
+            if (hLC != IntPtr.Zero)
+            {
+                lci.LcClose(hLC);
+            }
+            if (pLcErrorInfo != IntPtr.Zero)
+            {
+                lci.LC_CONFIG_ERRORINFO e = Marshal.PtrToStructure<lci.LC_CONFIG_ERRORINFO>(pLcErrorInfo);
+                if (e.dwVersion == LeechCore.LC_CONFIG_ERRORINFO_VERSION)
                 {
-                    ConfigErrorInfo.strUserText = Marshal.PtrToStringUni((System.IntPtr)(vaLcCreateErrorInfo + cbERROR_INFO));
+                    ConfigErrorInfo.fValid = true;
+                    ConfigErrorInfo.fUserInputRequest = e.fUserInputRequest;
+                    if (e.cwszUserText > 0)
+                    {
+                        ConfigErrorInfo.strUserText = Marshal.PtrToStringUni((System.IntPtr)(pLcErrorInfo.ToInt64() + cbERROR_INFO));
+                    }
                 }
+                lci.LcMemFree(pLcErrorInfo);
             }
-            lci.LcMemFree(pLcErrorInfo);
-            return hLC;
+            return null;
         }
 
-        public static ulong Create(ref CONFIG pLcCreateConfig)
+        public LeechCore(string strDevice)
         {
-            CONFIG_ERRORINFO ErrorInfo;
-            return Create(ref pLcCreateConfig, out ErrorInfo);
-        }
-
-        [DllImport("leechcore.dll", EntryPoint = "LcClose")]
-        public static extern void Close(ulong hLC);
-
-        public static unsafe byte[] Read(ulong hLC, ulong pa, uint cb)
-        {
-            byte[] data = new byte[cb];
-            fixed (byte* pb = data)
+            LC_CONFIG cfg = new LC_CONFIG();
+            cfg.dwVersion = LeechCore.LC_CONFIG_VERSION;
+            cfg.szDevice = strDevice;
+            IntPtr hLC = lci.LcCreate(ref cfg);
+            if (hLC == IntPtr.Zero)
             {
-                bool result = lci.LcRead(hLC, pa, cb, pb);
+                throw new Exception("LeechCore: failed to create object.");
+            }
+            this.hLC = hLC;
+        }
+
+        public LeechCore(string strDevice, string strRemote, uint dwVerbosityFlags, ulong paMax)
+        {
+            LC_CONFIG cfg = new LC_CONFIG();
+            cfg.dwVersion = LeechCore.LC_CONFIG_VERSION;
+            cfg.szDevice = strDevice;
+            cfg.szRemote = strRemote;
+            cfg.dwPrintfVerbosity = dwVerbosityFlags;
+            cfg.paMax = paMax;
+            IntPtr hLC = lci.LcCreate(ref cfg);
+            if (hLC == IntPtr.Zero)
+            {
+                throw new Exception("LeechCore: failed to create object.");
+            }
+            this.hLC = hLC;
+        }
+
+        public LeechCore(Vmm vmm)
+        {
+            ulong pqwValue;
+            if (!vmm.ConfigGet(Vmm.OPT_CORE_LEECHCORE_HANDLE, out pqwValue))
+            {
+                throw new Exception("LeechCore: failed retrieving handle from Vmm.");
+            }
+            string strDevice = string.Format("existing://0x{0:X}", pqwValue);
+            LC_CONFIG cfg = new LC_CONFIG();
+            cfg.dwVersion = LeechCore.LC_CONFIG_VERSION;
+            cfg.szDevice = strDevice;
+            IntPtr hLC = lci.LcCreate(ref cfg);
+            if (hLC == IntPtr.Zero)
+            {
+                throw new Exception("LeechCore: failed to create object.");
+            }
+            this.hLC = hLC;
+        }
+
+        ~LeechCore()
+        {
+            Dispose(disposing: false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!this.disposed)
+            {
+                lci.LcClose(hLC);
+                hLC = IntPtr.Zero;
+                disposed = true;
+            }
+        }
+
+        public void Close()
+        {
+            Dispose(disposing: true);
+        }
+
+
+
+        //---------------------------------------------------------------------
+        // LEECHCORE: GENERAL FUNCTIONALITY BELOW:
+        //---------------------------------------------------------------------
+
+        /// <summary>
+        /// Read a single physical memory range.
+        /// </summary>
+        /// <param name="pa">Physical address to read.</param>
+        /// <param name="cb">Number of bytes to read.</param>
+        /// <returns>Bytes read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe byte[] Read(ulong pa, uint cb) =>
+            ReadArray<byte>(pa, cb);
+
+        /// <summary>
+        /// Read physcial memory into a single struct value <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pa">Physical address to read.</param>
+        /// <param name="result">Result value to populate</param>
+        /// <returns>True if read successful, otherwise False.</returns>
+        public unsafe bool ReadStruct<T>(ulong pa, out T result)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T);
+            result = default;
+            fixed (T* pb = &result)
+            {
+                if (!lci.LcRead(hLC, pa, cb, (byte*)pb))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Read physical memory into an array of type <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pa">Physical address to read.</param>
+        /// <param name="count">Number of elements to read.</param>
+        /// <returns>Managed Array of type <typeparamref name="T"/>. Null if read failed.</returns>
+        public unsafe T[] ReadArray<T>(ulong pa, uint count)
+            where T : unmanaged
+        {
+            uint cb = count * (uint)sizeof(T);
+            T[] data = new T[count];
+            fixed (T* pb = data)
+            {
+                bool result = lci.LcRead(hLC, pa, cb, (byte*)pb);
                 return result ? data : null;
             }
         }
 
-        public static unsafe MEM_SCATTER[] ReadScatter(ulong hLC, params ulong[] qwA)
+        /// <summary>
+        /// Read physical memory into unmanaged memory.
+        /// </summary>
+        /// <param name="pa">Physical address to read.</param>
+        /// <param name="cb">Counte of bytes to read.</param>
+        /// <param name="pb">Pointer to buffer to read into.</param>
+        /// <returns>True if read successful, otherwise False.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool Read(ulong pa, uint cb, IntPtr pb) =>
+            Read(pa, cb, pb.ToPointer());
+
+        /// <summary>
+        /// Read physical memory into unmanaged memory.
+        /// </summary>
+        /// <param name="pa">Physical address to read.</param>
+        /// <param name="cb">Counte of bytes to read.</param>
+        /// <param name="pb">Pointer to buffer to read into.</param>
+        /// <returns>True if read successful, otherwise False.</returns>
+        public unsafe bool Read(ulong pa, uint cb, void* pb)
+        {
+            if (!lci.LcRead(hLC, pa, cb, (byte*)pb))
+                return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Read multiple page-sized physical memory ranges.
+        /// </summary>
+        /// <param name="pa">Array of multiple physical addresses to read.</param>
+        /// <returns>An arary of MEM_SCATTER containing the page-sized results of the reads.</returns>
+        public MEM_SCATTER[] ReadScatter(params ulong[] pas)
         {
             int i;
             long vappMEMs, vapMEM;
             IntPtr pMEM, pMEM_qwA, pppMEMs;
-            if (!lci.LcAllocScatter1((uint)qwA.Length, out pppMEMs))
+            if (!lci.LcAllocScatter1((uint)pas.Length, out pppMEMs))
             {
                 return null;
             }
             vappMEMs = pppMEMs.ToInt64();
-            for (i = 0; i < qwA.Length; i++)
+            for (i = 0; i < pas.Length; i++)
             {
                 vapMEM = Marshal.ReadIntPtr(new IntPtr(vappMEMs + i * 8)).ToInt64();
                 pMEM_qwA = new IntPtr(vapMEM + 8);
-                Marshal.WriteInt64(pMEM_qwA, (long)(qwA[i] & ~(ulong)0xfff));
+                Marshal.WriteInt64(pMEM_qwA, (long)(pas[i] & ~(ulong)0xfff));
             }
-            MEM_SCATTER[] MEMs = new MEM_SCATTER[qwA.Length];
+            MEM_SCATTER[] MEMs = new MEM_SCATTER[pas.Length];
             lci.LcReadScatter(hLC, (uint)MEMs.Length, pppMEMs);
             for (i = 0; i < MEMs.Length; i++)
             {
@@ -198,22 +401,83 @@ namespace vmmsharp
             return MEMs;
         }
 
-        public static unsafe bool Write(ulong hLC, ulong pa, byte[] data)
+        /// <summary>
+        /// Write a single range of physical memory.
+        /// </summary>
+        /// <param name="pa">Physical address to write</param>
+        /// <param name="data">Data to write starting at pa.</param>
+        /// <returns>True if write successful, otherwise False. The write is best-effort and may fail. It's recommended to verify the write with a subsequent read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool Write(ulong pa, byte[] data) =>
+            WriteArray<byte>(pa, data);
+
+        /// <summary>
+        /// Write a single struct <typeparamref name="T"/> into physical memory.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pa">Physical address to write</param>
+        /// <param name="value"><typeparamref name="T"/> value to write.</param>
+        /// <returns>True if write successful, otherwise False. The write is best-effort and may fail. It's recommended to verify the write with a subsequent read.</returns>
+        public unsafe bool WriteStruct<T>(ulong pa, T value)
+            where T : unmanaged
         {
-            fixed (byte* pb = data)
+            uint cb = (uint)sizeof(T);
+            byte* pb = (byte*)&value;
+            return lci.LcWrite(hLC, pa, cb, pb);
+        }
+
+        /// <summary>
+        /// Write a managed <typeparamref name="T"/> array into physical memory.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pa">Physical address to write</param>
+        /// <param name="data">Managed <typeparamref name="T"/> array to write.</param>
+        /// <returns>True if write successful, otherwise False. The write is best-effort and may fail. It's recommended to verify the write with a subsequent read.</returns>
+        public unsafe bool WriteArray<T>(ulong pa, T[] data)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T) * (uint)data.Length;
+            fixed (T* pb = data)
             {
-                return lci.LcWrite(hLC, pa, (uint)data.Length, pb);
+                return lci.LcWrite(hLC, pa, cb, (byte*)pb);
             }
         }
 
-        public static unsafe void WriteScatter(ulong hLC, ref MEM_SCATTER[] MEMs)
+        /// <summary>
+        /// Write from unmanaged memory into physical memory.
+        /// </summary>
+        /// <param name="pa">Physical address to write</param>
+        /// <param name="cb">Count of bytes to write.</param>
+        /// <param name="pb">Pointer to buffer to write from.</param>
+        /// <returns>True if write successful, otherwise False. The write is best-effort and may fail. It's recommended to verify the write with a subsequent read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool Write(ulong pa, uint cb, IntPtr pb) =>
+            Write(pa, cb, pb.ToPointer());
+
+        /// <summary>
+        /// Write from unmanaged memory into physical memory.
+        /// </summary>
+        /// <param name="pa">Physical address to write</param>
+        /// <param name="cb">Count of bytes to write.</param>
+        /// <param name="pb">Pointer to buffer to write from.</param>
+        /// <returns>True if write successful, otherwise False. The write is best-effort and may fail. It's recommended to verify the write with a subsequent read.</returns>
+        public unsafe bool Write(ulong pa, uint cb, void* pb)
+        {
+            return lci.LcWrite(hLC, pa, cb, (byte*)pb);
+        }
+
+        /// <summary>
+        /// Write multiple page-sized physical memory ranges. The write is best-effort and may fail. It's recommended to verify the writes with subsequent reads.
+        /// </summary>
+        /// <param name="MEMs">MEMs containing the memory addresses and data to write.</param>
+        public void WriteScatter(ref MEM_SCATTER[] MEMs)
         {
             int i;
             long vappMEMs, vapMEM;
             IntPtr pMEM, pMEM_f, pMEM_qwA, pMEM_pb, pppMEMs;
             for (i = 0; i < MEMs.Length; i++)
             {
-                if((MEMs[i].pb == null) || (MEMs[i].pb.Length != 0x1000))
+                if ((MEMs[i].pb == null) || (MEMs[i].pb.Length != 0x1000))
                 {
                     return;
                 }
@@ -244,92 +508,150 @@ namespace vmmsharp
             lci.LcMemFree(pppMEMs);
         }
 
-        [DllImport("leechcore.dll", EntryPoint = "LcGetOption")]
-        public static extern bool GetOption(ulong hLC, ulong fOption, out ulong pqwValue);
-
-        [DllImport("leechcore.dll", EntryPoint = "LcSetOption")]
-        public static extern bool SetOption(ulong hLC, ulong fOption, ulong qwValue);
-
-        public static unsafe bool Command(ulong hLC, ulong fOption, byte[] DataIn, out byte[] DataOut)
+        /// <summary>
+        /// Retrieve a LeechCore option value.
+        /// </summary>
+        /// <param name="fOption">Parameter LeechCore.LC_OPT_*</param>
+        /// <param name="pqwValue">The option value retrieved.</param>
+        /// <returns></returns>
+        public bool GetOption(ulong fOption, out ulong pqwValue)
         {
-            bool result;
-            uint cbDataOut;
-            IntPtr PtrDataOut;
-            DataOut = null;
-            if(DataIn == null)
+            return lci.GetOption(hLC, fOption, out pqwValue);
+        }
+
+        /// <summary>
+        /// Set a LeechCore option value.
+        /// </summary>
+        /// <param name="fOption">Parameter LeechCore.LC_OPT_*</param>
+        /// <param name="qwValue">The option value to set.</param>
+        /// <returns></returns>
+        public bool SetOption(ulong fOption, ulong qwValue)
+        {
+            return lci.SetOption(hLC, fOption, qwValue);
+        }
+
+        /// <summary>
+        /// Send a command to LeechCore.
+        /// </summary>
+        /// <param name="fOption">Parameter LeechCore.LC_CMD_*</param>
+        /// <param name="DataIn">The data to set (or null).</param>
+        /// <param name="DataOut">The data retrieved.</param>
+        /// <returns></returns>
+        public bool Command(ulong fOption, byte[] DataIn, out byte[] DataOut)
+        {
+            unsafe
             {
-                result = lci.LcCommand(hLC, fOption, 0, null, out PtrDataOut, out cbDataOut);
-            } else
-            {
-                fixed (byte* pbDataIn = DataIn)
+                bool result;
+                uint cbDataOut;
+                IntPtr PtrDataOut;
+                DataOut = null;
+                if (DataIn == null)
                 {
-                    result = lci.LcCommand(hLC, fOption, (uint)DataIn.Length, pbDataIn, out PtrDataOut, out cbDataOut);
+                    result = lci.LcCommand(hLC, fOption, 0, null, out PtrDataOut, out cbDataOut);
                 }
+                else
+                {
+                    fixed (byte* pbDataIn = DataIn)
+                    {
+                        result = lci.LcCommand(hLC, fOption, (uint)DataIn.Length, pbDataIn, out PtrDataOut, out cbDataOut);
+                    }
+                }
+                if (!result) { return false; }
+                DataOut = new byte[cbDataOut];
+                if (cbDataOut > 0)
+                {
+                    Marshal.Copy(PtrDataOut, DataOut, 0, (int)cbDataOut);
+                    lci.LcMemFree(PtrDataOut);
+                }
+                return true;
             }
-            if(!result) { return false; }
-            DataOut = new byte[cbDataOut];
-            if(cbDataOut > 0)
+        }
+
+        /// <summary>
+        /// Retrieve the memory map currently in use by LeechCore.
+        /// </summary>
+        /// <returns>The memory map (or null on failure).</returns>
+        public string GetMemMap()
+        {
+            byte[] bMemMap;
+            if (this.Command(LeechCore.LC_CMD_MEMMAP_GET, null, out bMemMap) && (bMemMap.Length > 0))
             {
-                Marshal.Copy(PtrDataOut, DataOut, 0, (int)cbDataOut);
-                lci.LcMemFree(PtrDataOut);
+                return System.Text.Encoding.UTF8.GetString(bMemMap);
             }
-            return true;
+            return null;
+        }
+
+        /// <summary>
+        /// Set the memory map for LeechCore to use.
+        /// </summary>
+        /// <param name="sMemMap">The memory map to set.</param>
+        /// <returns></returns>
+        public bool SetMemMap(string sMemMap)
+        {
+            return this.Command(LeechCore.LC_CMD_MEMMAP_SET, System.Text.Encoding.UTF8.GetBytes(sMemMap), out byte[] bMemMap);
         }
     }
 
-    public class Vmm : IDisposable
+
+
+    // MemProcFS public API:
+    public sealed class Vmm : IDisposable
     {
         //---------------------------------------------------------------------
         // CORE FUNCTIONALITY BELOW:
         //---------------------------------------------------------------------
 
-        public static ulong OPT_CORE_PRINTF_ENABLE = 0x4000000100000000;  // RW
-        public static ulong OPT_CORE_VERBOSE = 0x4000000200000000;  // RW
-        public static ulong OPT_CORE_VERBOSE_EXTRA = 0x4000000300000000;  // RW
-        public static ulong OPT_CORE_VERBOSE_EXTRA_TLP = 0x4000000400000000;  // RW
-        public static ulong OPT_CORE_MAX_NATIVE_ADDRESS = 0x4000000800000000;  // R
+        public const ulong OPT_CORE_PRINTF_ENABLE = 0x4000000100000000;  // RW
+        public const ulong OPT_CORE_VERBOSE = 0x4000000200000000;  // RW
+        public const ulong OPT_CORE_VERBOSE_EXTRA = 0x4000000300000000;  // RW
+        public const ulong OPT_CORE_VERBOSE_EXTRA_TLP = 0x4000000400000000;  // RW
+        public const ulong OPT_CORE_MAX_NATIVE_ADDRESS = 0x4000000800000000;  // R
+        public const ulong OPT_CORE_LEECHCORE_HANDLE = 0x4000001000000000;  // R - underlying leechcore handle (do not close).
 
-        public static ulong OPT_CORE_SYSTEM = 0x2000000100000000;  // R
-        public static ulong OPT_CORE_MEMORYMODEL = 0x2000000200000000;  // R
+        public const ulong OPT_CORE_SYSTEM = 0x2000000100000000;  // R
+        public const ulong OPT_CORE_MEMORYMODEL = 0x2000000200000000;  // R
 
-        public static ulong OPT_CONFIG_IS_REFRESH_ENABLED = 0x2000000300000000;  // R - 1/0
-        public static ulong OPT_CONFIG_TICK_PERIOD = 0x2000000400000000;  // RW - base tick period in ms
-        public static ulong OPT_CONFIG_READCACHE_TICKS = 0x2000000500000000;  // RW - memory cache validity period (in ticks)
-        public static ulong OPT_CONFIG_TLBCACHE_TICKS = 0x2000000600000000;  // RW - page table (tlb) cache validity period (in ticks)
-        public static ulong OPT_CONFIG_PROCCACHE_TICKS_PARTIAL = 0x2000000700000000; // RW - process refresh (partial) period (in ticks)
-        public static ulong OPT_CONFIG_PROCCACHE_TICKS_TOTAL = 0x2000000800000000;  // RW - process refresh (full) period (in ticks)
-        public static ulong OPT_CONFIG_VMM_VERSION_MAJOR = 0x2000000900000000;  // R
-        public static ulong OPT_CONFIG_VMM_VERSION_MINOR = 0x2000000A00000000;  // R
-        public static ulong OPT_CONFIG_VMM_VERSION_REVISION = 0x2000000B00000000;  // R
-        public static ulong OPT_CONFIG_STATISTICS_FUNCTIONCALL = 0x2000000C00000000; // RW - enable function call statistics (.status/statistics_fncall file)
-        public static ulong OPT_CONFIG_IS_PAGING_ENABLED = 0x2000000D00000000;  // RW - 1/0
+        public const ulong OPT_CONFIG_IS_REFRESH_ENABLED = 0x2000000300000000;  // R - 1/0
+        public const ulong OPT_CONFIG_TICK_PERIOD = 0x2000000400000000;  // RW - base tick period in ms
+        public const ulong OPT_CONFIG_READCACHE_TICKS = 0x2000000500000000;  // RW - memory cache validity period (in ticks)
+        public const ulong OPT_CONFIG_TLBCACHE_TICKS = 0x2000000600000000;  // RW - page table (tlb) cache validity period (in ticks)
+        public const ulong OPT_CONFIG_PROCCACHE_TICKS_PARTIAL = 0x2000000700000000;  // RW - process refresh (partial) period (in ticks)
+        public const ulong OPT_CONFIG_PROCCACHE_TICKS_TOTAL = 0x2000000800000000;  // RW - process refresh (full) period (in ticks)
+        public const ulong OPT_CONFIG_VMM_VERSION_MAJOR = 0x2000000900000000;  // R
+        public const ulong OPT_CONFIG_VMM_VERSION_MINOR = 0x2000000A00000000;  // R
+        public const ulong OPT_CONFIG_VMM_VERSION_REVISION = 0x2000000B00000000;  // R
+        public const ulong OPT_CONFIG_STATISTICS_FUNCTIONCALL = 0x2000000C00000000;  // RW - enable function call statistics (.status/statistics_fncall file)
+        public const ulong OPT_CONFIG_IS_PAGING_ENABLED = 0x2000000D00000000;  // RW - 1/0
+        public const ulong OPT_CONFIG_DEBUG = 0x2000000E00000000;  // W
+        public const ulong OPT_CONFIG_YARA_RULES = 0x2000000F00000000;  // R
 
-        public static ulong OPT_WIN_VERSION_MAJOR = 0x2000010100000000;  // R
-        public static ulong OPT_WIN_VERSION_MINOR = 0x2000010200000000;  // R
-        public static ulong OPT_WIN_VERSION_BUILD = 0x2000010300000000;  // R
+        public const ulong OPT_WIN_VERSION_MAJOR = 0x2000010100000000;  // R
+        public const ulong OPT_WIN_VERSION_MINOR = 0x2000010200000000;  // R
+        public const ulong OPT_WIN_VERSION_BUILD = 0x2000010300000000;  // R
+        public const ulong OPT_WIN_SYSTEM_UNIQUE_ID = 0x2000010400000000;  // R
 
-        public static ulong OPT_FORENSIC_MODE = 0x2000020100000000;  // RW - enable/retrieve forensic mode type [0-4].
+        public const ulong OPT_FORENSIC_MODE = 0x2000020100000000;  // RW - enable/retrieve forensic mode type [0-4].
 
-        public static ulong OPT_REFRESH_ALL = 0x2001ffff00000000;  // W - refresh all caches
-        public static ulong OPT_REFRESH_FREQ_FAST = 0x2001040000000000;  // W - refresh fast frequency (including partial process listings)
-        public static ulong OPT_REFRESH_FREQ_MEDIUM = 0x2001000100000000;  // W - refresh medium frequency (including full process listings)
-        public static ulong OPT_REFRESH_FREQ_SLOW = 0x2001001000000000;  // W - refresh slow frequency (including registry)
-        public static ulong OPT_REFRESH_READ = 0x2001000200000000;  // W - refresh physical read cache
-        public static ulong OPT_REFRESH_TLB = 0x2001000400000000;  // W - refresh page table (TLB) cache
-        public static ulong OPT_REFRESH_PAGING = 0x2001000800000000;  // W - refresh virtual memory 'paging' cache
-        public static ulong OPT_REFRESH_USER = 0x2001002000000000;  // W
-        public static ulong OPT_REFRESH_PHYSMEMMAP = 0x2001004000000000;  // W
-        public static ulong OPT_REFRESH_PFN = 0x2001008000000000;  // W
-        public static ulong OPT_REFRESH_OBJ = 0x2001010000000000;  // W
-        public static ulong OPT_REFRESH_NET = 0x2001020000000000;  // W
+        // REFRESH OPTIONS:
+        public const ulong OPT_REFRESH_ALL = 0x2001ffff00000000;  // W - refresh all caches
+        public const ulong OPT_REFRESH_FREQ_MEM = 0x2001100000000000;  // W - refresh memory cache (excl. TLB) [fully]
+        public const ulong OPT_REFRESH_FREQ_MEM_PARTIAL = 0x2001000200000000;  // W - refresh memory cache (excl. TLB) [partial 33%/call]
+        public const ulong OPT_REFRESH_FREQ_TLB = 0x2001080000000000;  // W - refresh page table (TLB) cache [fully]
+        public const ulong OPT_REFRESH_FREQ_TLB_PARTIAL = 0x2001000400000000;  // W - refresh page table (TLB) cache [partial 33%/call]
+        public const ulong OPT_REFRESH_FREQ_FAST = 0x2001040000000000;  // W - refresh fast frequency - incl. partial process refresh
+        public const ulong OPT_REFRESH_FREQ_MEDIUM = 0x2001000100000000;  // W - refresh medium frequency - incl. full process refresh
+        public const ulong OPT_REFRESH_FREQ_SLOW = 0x2001001000000000;  // W - refresh slow frequency.
 
+        // PROCESS OPTIONS: [LO-DWORD: Process PID]
+        public const ulong OPT_PROCESS_DTB = 0x2002000100000000;  // W - force set process directory table base.
 
         public enum MEMORYMODEL_TP
         {
             MEMORYMODEL_NA = 0,
             MEMORYMODEL_X86 = 1,
             MEMORYMODEL_X86PAE = 2,
-            MEMORYMODEL_X64 = 3
+            MEMORYMODEL_X64 = 3,
+            MEMORYMODEL_ARM64 = 4
         }
 
         public enum SYSTEM_TP
@@ -348,13 +670,13 @@ namespace vmmsharp
         {
         }
 
-        private static unsafe IntPtr Initialize(out lc.CONFIG_ERRORINFO ConfigErrorInfo, params string[] args)
+        private static unsafe IntPtr Initialize(out LeechCore.LC_CONFIG_ERRORINFO ConfigErrorInfo, params string[] args)
         {
             IntPtr pLcErrorInfo;
-            int cbERROR_INFO = System.Runtime.InteropServices.Marshal.SizeOf(typeof(lci.LC_CONFIG_ERRORINFO));
+            int cbERROR_INFO = System.Runtime.InteropServices.Marshal.SizeOf<lci.LC_CONFIG_ERRORINFO>();
             IntPtr hVMM = vmmi.VMMDLL_InitializeEx(args.Length, args, out pLcErrorInfo);
             long vaLcCreateErrorInfo = pLcErrorInfo.ToInt64();
-            ConfigErrorInfo = new lc.CONFIG_ERRORINFO();
+            ConfigErrorInfo = new LeechCore.LC_CONFIG_ERRORINFO();
             ConfigErrorInfo.strUserText = "";
             if (hVMM.ToInt64() == 0)
             {
@@ -365,7 +687,7 @@ namespace vmmsharp
                 return hVMM;
             }
             lci.LC_CONFIG_ERRORINFO e = Marshal.PtrToStructure<lci.LC_CONFIG_ERRORINFO>(pLcErrorInfo);
-            if (e.dwVersion == lc.CONFIG_ERRORINFO_VERSION)
+            if (e.dwVersion == LeechCore.LC_CONFIG_ERRORINFO_VERSION)
             {
                 ConfigErrorInfo.fValid = true;
                 ConfigErrorInfo.fUserInputRequest = e.fUserInputRequest;
@@ -378,14 +700,14 @@ namespace vmmsharp
             return hVMM;
         }
 
-        public Vmm(out lc.CONFIG_ERRORINFO ConfigErrorInfo, params string[] args)
+        public Vmm(out LeechCore.LC_CONFIG_ERRORINFO ConfigErrorInfo, params string[] args)
         {
             this.hVMM = Vmm.Initialize(out ConfigErrorInfo, args);
         }
 
         public Vmm(params string[] args)
         {
-            lc.CONFIG_ERRORINFO ErrorInfo;
+            LeechCore.LC_CONFIG_ERRORINFO ErrorInfo;
             this.hVMM = Vmm.Initialize(out ErrorInfo, args);
         }
 
@@ -400,7 +722,7 @@ namespace vmmsharp
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (!this.disposed)
             {
@@ -428,6 +750,26 @@ namespace vmmsharp
         public bool ConfigSet(ulong fOption, ulong qwValue)
         {
             return vmmi.VMMDLL_ConfigSet(hVMM, fOption, qwValue);
+        }
+
+        /// <summary>
+        /// Returns current Memory Map in string format.
+        /// </summary>
+        /// <returns>Memory Map, NULL if failed.</returns>
+        public string GetMemoryMap()
+        {
+            var map = Map_GetPhysMem();
+            if (map.Length == 0)
+                return null;
+            var sb = new StringBuilder();
+            int leftLength = map.Max(x => x.pa).ToString("x").Length;
+            for (int i = 0; i < map.Length; i++)
+            {
+                sb.AppendFormat($"{{0,{-leftLength}}}", map[i].pa.ToString("x"))
+                    .Append($" - {(map[i].pa + map[i].cb - 1).ToString("x")}")
+                    .AppendLine();
+            }
+            return sb.ToString();
         }
 
         //---------------------------------------------------------------------
@@ -503,16 +845,23 @@ namespace vmmsharp
         // MEMORY READ/WRITE FUNCTIONALITY BELOW:
         //---------------------------------------------------------------------
 
-        public static uint PID_PROCESS_WITH_KERNELMEMORY = 0x80000000;      // Combine with dwPID to enable process kernel memory (NB! use with extreme care).
+        public const uint PID_PROCESS_WITH_KERNELMEMORY = 0x80000000;      // Combine with dwPID to enable process kernel memory (NB! use with extreme care).
 
-        public static uint FLAG_NOCACHE = 0x0001;  // do not use the data cache (force reading from memory acquisition device)
-        public static uint FLAG_ZEROPAD_ON_FAIL = 0x0002;  // zero pad failed physical memory reads and report success if read within range of physical memory.
-        public static uint FLAG_FORCECACHE_READ = 0x0008;  // force use of cache - fail non-cached pages - only valid for reads, invalid with VMM_FLAG_NOCACHE/VMM_FLAG_ZEROPAD_ON_FAIL.
-        public static uint FLAG_NOPAGING = 0x0010;  // do not try to retrieve memory from paged out memory from pagefile/compressed (even if possible)
-        public static uint FLAG_NOPAGING_IO = 0x0020;  // do not try to retrieve memory from paged out memory if read would incur additional I/O (even if possible).
-        public static uint FLAG_NOCACHEPUT = 0x0100;  // do not write back to the data cache upon successful read from memory acquisition device.
-        public static uint FLAG_CACHE_RECENT_ONLY = 0x0200;  // only fetch from the most recent active cache region when reading.
+        public const uint FLAG_NOCACHE = 0x0001;  // do not use the data cache (force reading from memory acquisition device)
+        public const uint FLAG_ZEROPAD_ON_FAIL = 0x0002;  // zero pad failed physical memory reads and report success if read within range of physical memory.
+        public const uint FLAG_FORCECACHE_READ = 0x0008;  // force use of cache - fail non-cached pages - only valid for reads, invalid with VMM_FLAG_NOCACHE/VMM_FLAG_ZEROPAD_ON_FAIL.
+        public const uint FLAG_NOPAGING = 0x0010;  // do not try to retrieve memory from paged out memory from pagefile/compressed (even if possible)
+        public const uint FLAG_NOPAGING_IO = 0x0020;  // do not try to retrieve memory from paged out memory if read would incur additional I/O (even if possible).
+        public const uint FLAG_NOCACHEPUT = 0x0100;  // do not write back to the data cache upon successful read from memory acquisition device.
+        public const uint FLAG_CACHE_RECENT_ONLY = 0x0200;  // only fetch from the most recent active cache region when reading.
 
+        /// <summary>
+        /// Performs a Scatter Read on a collection of page-aligned Virtual Addresses.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="flags">VMM Flags</param>
+        /// <param name="qwA">Array of Virtual Addresses to read.</param>
+        /// <returns>Array of MEM_SCATTER structures.</returns>
         public unsafe MEM_SCATTER[] MemReadScatter(uint pid, uint flags, params ulong[] qwA)
         {
             int i;
@@ -552,26 +901,121 @@ namespace vmmsharp
         }
 
         /// <summary>
-        /// Customized for Unispect.
-        /// Modified by Frost.
+        /// Read Memory from a Virtual Address into a managed byte-array.
         /// </summary>
-        /// <param name="pid">Process ID to read from.</param>
-        /// <param name="qwA">Address to read from.</param>
-        /// <param name="cb">Number of bytes to read.</param>
-        /// <param name="flags">Read flags.</param>
-        /// <returns>Byte array containing memory read.</returns>
-        public unsafe byte[] MemRead(uint pid, ulong qwA, uint cb, uint flags = 0)
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="cb">Count of bytes to read.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <returns>Managed byte array containing number of bytes read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe byte[] MemRead(uint pid, ulong qwA, uint cb, uint flags = 0) =>
+            MemReadArray<byte>(pid, qwA, cb, flags);
+
+        /// <summary>
+        /// Read Memory from a Virtual Address into unmanaged memory.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="cb">Count of bytes to read.</param>
+        /// <param name="pb">Pointer to buffer to receive read.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <returns>Count of bytes read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe uint MemRead(uint pid, ulong qwA, uint cb, IntPtr pb, uint flags = 0) =>
+            MemRead(pid, qwA, cb, pb.ToPointer(), flags);
+
+        /// <summary>
+        /// Read Memory from a Virtual Address into unmanaged memory.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="cb">Count of bytes to read.</param>
+        /// <param name="pb">Pointer to buffer to receive read.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <returns>Count of bytes read.</returns>
+        public unsafe uint MemRead(uint pid, ulong qwA, uint cb, void* pb, uint flags = 0)
         {
+            if (!vmmi.VMMDLL_MemReadEx(hVMM, pid, qwA, (byte*)pb, cb, out var cbRead, flags))
+                return 0;
+            return cbRead;
+        }
+
+        /// <summary>
+        /// Read Memory from a Virtual Address into a struct of Type <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">Struct Type.</typeparam>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="result">Result populated from this read.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <returns>True if read successful, otherwise False.</returns>
+        public unsafe bool MemReadStruct<T>(uint pid, ulong qwA, out T result, uint flags = 0)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T);
+            result = default;
             uint cbRead;
-            byte[] data = new byte[cb];
-            fixed (byte* pb = data)
+            fixed (T* pb = &result)
             {
-                if (!vmmi.VMMDLL_MemReadEx(hVMM, pid, qwA, pb, cb, out cbRead, flags))
+                if (!vmmi.VMMDLL_MemReadEx(hVMM, pid, qwA, (byte*)pb, cb, out cbRead, flags))
+                    return false;
+            }
+            if (cbRead != cb)
+                return false;
+            return true;
+        }
+
+
+        /// <summary>
+        /// Modified by FROST for this plugin.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="pid"></param>
+        /// <param name="qwA"></param>
+        /// <param name="count"></param>
+        /// <param name="flags"></param>
+        /// <returns></returns>
+        public unsafe T[] MemReadArray<T>(uint pid, ulong qwA, uint count, uint flags = 0)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T) * count;
+            uint cbRead;
+            T[] data = new T[cb];
+            fixed (T* pb = data)
+            {
+                if (!vmmi.VMMDLL_MemReadEx(hVMM, pid, qwA, (byte*)pb, cb, out cbRead, flags))
                 {
                     return null;
                 }
             }
             return data;
+        }
+
+        /// <summary>
+        /// Read Memory from a Virtual Address into a Managed String.
+        /// </summary>
+        /// <param name="encoding">String Encoding for this read.</param>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="cb">Number of bytes to read. Keep in mind some string encodings are 2-4 bytes per character.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <param name="terminateOnNullChar">Terminate the string at the first occurrence of the null character.</param>
+        /// <returns>C# Managed System.String. Null if failed.</returns>
+        public unsafe string MemReadString(Encoding encoding, uint pid, ulong qwA, uint cb,
+            uint flags = 0, bool terminateOnNullChar = true)
+        {
+            byte[] buffer = MemRead(pid, qwA, cb, flags);
+            if (buffer is null)
+                return null;
+            var result = encoding.GetString(buffer);
+            if (terminateOnNullChar)
+            {
+                int nullIndex = result.IndexOf('\0');
+                if (nullIndex != -1)
+                    result = result.Substring(0, nullIndex);
+            }
+            return result;
         }
 
         public unsafe bool MemPrefetchPages(uint pid, ulong[] qwA)
@@ -584,11 +1028,72 @@ namespace vmmsharp
             }
         }
 
-        public unsafe bool MemWrite(uint pid, ulong qwA, byte[] data)
+        /// <summary>
+        /// Write Memory from a managed byte-array to a given Virtual Address.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to write to.</param>
+        /// <param name="data">Data to be written.</param>
+        /// <returns>True if write successful, otherwise False.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool MemWrite(uint pid, ulong qwA, byte[] data) =>
+            MemWriteArray<byte>(pid, qwA, data);
+
+        /// <summary>
+        /// Write Memory from unmanaged memory to a given Virtual Address.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to write to.</param>
+        /// <param name="cb">Count of bytes to write.</param>
+        /// <param name="pb">Pointer to buffer to write from.</param>
+        /// <returns>True if write successful, otherwise False.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool MemWrite(uint pid, ulong qwA, uint cb, IntPtr pb) =>
+            MemWrite(pid, qwA, cb, pb.ToPointer());
+
+        /// <summary>
+        /// Write Memory from unmanaged memory to a given Virtual Address.
+        /// </summary>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to write to.</param>
+        /// <param name="cb">Count of bytes to write.</param>
+        /// <param name="pb">Pointer to buffer to write from.</param>
+        /// <returns>True if write successful, otherwise False.</returns>
+        public unsafe bool MemWrite(uint pid, ulong qwA, uint cb, void* pb) =>
+            vmmi.VMMDLL_MemWrite(hVMM, pid, qwA, (byte*)pb, cb);
+
+        /// <summary>
+        /// Write Memory from a struct value <typeparamref name="T"/> to a given Virtual Address.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to write to.</param>
+        /// <param name="value"><typeparamref name="T"/> Value to write.</param>
+        /// <returns>True if write successful, otherwise False.</returns>
+        public unsafe bool MemWriteStruct<T>(uint pid, ulong qwA, T value)
+            where T : unmanaged
         {
-            fixed (byte* pb = data)
+            uint cb = (uint)sizeof(T);
+            byte* pb = (byte*)&value;
+            return vmmi.VMMDLL_MemWrite(hVMM, pid, qwA, pb, cb);
+        }
+
+        /// <summary>
+        /// Write Memory from a managed <typeparamref name="T"/> Array to a given Virtual Address.
+        /// </summary>
+        /// <typeparam name="T">Value Type.</typeparam>
+        /// <param name="pid">Process ID.</param>
+        /// <param name="qwA">Virtual Address to write to.</param>
+        /// <param name="data">Managed <typeparamref name="T"/> array to write.</param>
+        /// <param name="flags">VMM Flags.</param>
+        /// <returns>True if write successful, otherwise False.</returns>
+        public unsafe bool MemWriteArray<T>(uint pid, ulong qwA, T[] data)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T) * (uint)data.Length;
+            fixed (T* pb = data)
             {
-                return vmmi.VMMDLL_MemWrite(hVMM, pid, qwA, pb, (uint)data.Length);
+                return vmmi.VMMDLL_MemWrite(hVMM, pid, qwA, (byte*)pb, cb);
             }
         }
 
@@ -717,11 +1222,11 @@ namespace vmmsharp
         public unsafe PROCESS_INFORMATION ProcessGetInformation(uint pid)
         {
             bool result;
-            ulong cbENTRY = (ulong)System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_PROCESS_INFORMATION));
+            ulong cbENTRY = (ulong)System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_PROCESS_INFORMATION>();
             fixed (byte* pb = new byte[cbENTRY])
             {
-                Marshal.WriteInt64(new IntPtr(pb + 0), (long)vmmi.VMMDLL_PROCESS_INFORMATION_MAGIC);
-                Marshal.WriteInt16(new IntPtr(pb + 8), (short)vmmi.VMMDLL_PROCESS_INFORMATION_VERSION);
+                Marshal.WriteInt64(new IntPtr(pb + 0), unchecked((long)vmmi.VMMDLL_PROCESS_INFORMATION_MAGIC));
+                Marshal.WriteInt16(new IntPtr(pb + 8), unchecked((short)vmmi.VMMDLL_PROCESS_INFORMATION_VERSION));
                 result = vmmi.VMMDLL_ProcessGetInformation(hVMM, pid, pb, ref cbENTRY);
                 if (!result) { return new PROCESS_INFORMATION(); }
                 vmmi.VMMDLL_PROCESS_INFORMATION n = Marshal.PtrToStructure<vmmi.VMMDLL_PROCESS_INFORMATION>((System.IntPtr)pb);
@@ -750,9 +1255,9 @@ namespace vmmsharp
             }
         }
 
-        public static uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_KERNEL = 1;
-        public static uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_USER_IMAGE = 2;
-        public static uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_CMDLINE = 3;
+        public const uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_KERNEL = 1;
+        public const uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_USER_IMAGE = 2;
+        public const uint VMMDLL_PROCESS_INFORMATION_OPT_STRING_CMDLINE = 3;
 
         public unsafe string ProcessGetInformationString(uint pid, uint fOptionString)
         {
@@ -788,8 +1293,7 @@ namespace vmmsharp
         {
             string[] PE_DATA_DIRECTORIES = new string[16] { "EXPORT", "IMPORT", "RESOURCE", "EXCEPTION", "SECURITY", "BASERELOC", "DEBUG", "ARCHITECTURE", "GLOBALPTR", "TLS", "LOAD_CONFIG", "BOUND_IMPORT", "IAT", "DELAY_IMPORT", "COM_DESCRIPTOR", "RESERVED" };
             bool result;
-            uint cData;
-            uint cbENTRY = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_IMAGE_DATA_DIRECTORY));
+            uint cbENTRY = (uint)System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_IMAGE_DATA_DIRECTORY>();
             fixed (byte* pb = new byte[16 * cbENTRY])
             {
                 result = vmmi.VMMDLL_ProcessGetDirectories(hVMM, pid, wszModule, pb);
@@ -812,7 +1316,7 @@ namespace vmmsharp
         {
             bool result;
             uint cData;
-            uint cbENTRY = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_IMAGE_SECTION_HEADER));
+            uint cbENTRY = (uint)System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_IMAGE_SECTION_HEADER>();
             result = vmmi.VMMDLL_ProcessGetSections(hVMM, pid, wszModule, null, 0, out cData);
             if (!result || (cData == 0)) { return new IMAGE_SECTION_HEADER[0]; }
             fixed (byte* pb = new byte[cData * cbENTRY])
@@ -863,7 +1367,7 @@ namespace vmmsharp
             fixed (byte* pb = data)
             {
                 bool result = vmmi.VMMDLL_PdbLoad(hVMM, pid, vaModuleBase, pb);
-                if(!result) { return false; }
+                if (!result) { return false; }
                 szModuleName = Encoding.UTF8.GetString(data);
                 szModuleName = szModuleName.Substring(0, szModuleName.IndexOf((char)0));
             }
@@ -906,10 +1410,10 @@ namespace vmmsharp
         // "MAP" FUNCTIONALITY BELOW:
         //---------------------------------------------------------------------
 
-        public static ulong MEMMAP_FLAG_PAGE_W =    0x0000000000000002;
-        public static ulong MEMMAP_FLAG_PAGE_NS =   0x0000000000000004;
-        public static ulong MEMMAP_FLAG_PAGE_NX =   0x8000000000000000;
-        public static ulong MEMMAP_FLAG_PAGE_MASK = 0x8000000000000006;
+        public const ulong MEMMAP_FLAG_PAGE_W = 0x0000000000000002;
+        public const ulong MEMMAP_FLAG_PAGE_NS = 0x0000000000000004;
+        public const ulong MEMMAP_FLAG_PAGE_NX = 0x8000000000000000;
+        public const ulong MEMMAP_FLAG_PAGE_MASK = 0x8000000000000006;
 
         public struct MAP_PTEENTRY
         {
@@ -967,14 +1471,15 @@ namespace vmmsharp
             public ulong va;
             public ulong pa;
             public ulong pte;
+            public uint pteFlags;
             public MAP_VADEXENTRY_PROTOTYPE proto;
             public ulong vaVadBase;
         }
 
-        public static uint MAP_MODULEENTRY_TP_NORMAL    = 0;
-        public static uint VMMDLL_MODULE_TP_DATA        = 1;
-        public static uint VMMDLL_MODULE_TP_NOTLINKED   = 2;
-        public static uint VMMDLL_MODULE_TP_INJECTED    = 3;
+        public const uint MAP_MODULEENTRY_TP_NORMAL = 0;
+        public const uint VMMDLL_MODULE_TP_DATA = 1;
+        public const uint VMMDLL_MODULE_TP_NOTLINKED = 2;
+        public const uint VMMDLL_MODULE_TP_INJECTED = 3;
 
         public struct MODULEENTRY_DEBUGINFO
         {
@@ -1028,7 +1533,7 @@ namespace vmmsharp
 
         public struct MAP_EATINFO
         {
-            public bool fValid; 
+            public bool fValid;
             public ulong vaModuleBase;
             public ulong vaAddressOfFunctions;
             public ulong vaAddressOfNames;
@@ -1111,6 +1616,7 @@ namespace vmmsharp
             public ulong vaStackBaseKernel;
             public ulong vaStackLimitKernel;
             public ulong vaTrapFrame;
+            public ulong vaImpersonationToken;
             public ulong vaRIP;
             public ulong vaRSP;
             public ulong qwAffinity;
@@ -1244,8 +1750,8 @@ namespace vmmsharp
 
         public unsafe MAP_PTEENTRY[] Map_GetPte(uint pid, bool fIdentifyModules = true)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PTE));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PTEENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PTE>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PTEENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_PTEENTRY[] m = new MAP_PTEENTRY[0];
             if (!vmmi.VMMDLL_Map_GetPte(hVMM, pid, fIdentifyModules, out pMap)) { goto fail; }
@@ -1273,8 +1779,8 @@ namespace vmmsharp
 
         public unsafe MAP_VADENTRY[] Map_GetVad(uint pid, bool fIdentifyModules = true)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_VAD));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_VADENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_VAD>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_VADENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_VADENTRY[] m = new MAP_VADENTRY[0];
             if (!vmmi.VMMDLL_Map_GetVad(hVMM, pid, fIdentifyModules, out pMap)) { goto fail; }
@@ -1320,8 +1826,8 @@ namespace vmmsharp
 
         public unsafe MAP_VADEXENTRY[] Map_GetVadEx(uint pid, uint oPages, uint cPages)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_VADEX));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_VADEXENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_VADEX>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_VADEXENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_VADEXENTRY[] m = new MAP_VADEXENTRY[0];
             if (!vmmi.VMMDLL_Map_GetVadEx(hVMM, pid, oPages, cPages, out pMap)) { goto fail; }
@@ -1334,6 +1840,7 @@ namespace vmmsharp
                 MAP_VADEXENTRY e;
                 e.tp = n.tp;
                 e.iPML = n.iPML;
+                e.pteFlags = n.pteFlags;
                 e.va = n.va;
                 e.pa = n.pa;
                 e.pte = n.pte;
@@ -1350,8 +1857,8 @@ namespace vmmsharp
 
         public unsafe MAP_MODULEENTRY[] Map_GetModule(uint pid, bool fExtendedInfo)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_MODULE));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_MODULEENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_MODULE>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_MODULEENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_MODULEENTRY[] m = new MAP_MODULEENTRY[0];
             uint flags = fExtendedInfo ? (uint)0xff : 0;
@@ -1453,8 +1960,8 @@ namespace vmmsharp
 
         public unsafe MAP_UNLOADEDMODULEENTRY[] Map_GetUnloadedModule(uint pid)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_UNLOADEDMODULE));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_UNLOADEDMODULEENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_UNLOADEDMODULE>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_UNLOADEDMODULEENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_UNLOADEDMODULEENTRY[] m = new MAP_UNLOADEDMODULEENTRY[0];
             if (!vmmi.VMMDLL_Map_GetUnloadedModule(hVMM, pid, out pMap)) { goto fail; }
@@ -1482,8 +1989,8 @@ namespace vmmsharp
         public unsafe MAP_EATENTRY[] Map_GetEAT(uint pid, string wszModule, out MAP_EATINFO EatInfo)
         {
             EatInfo = new MAP_EATINFO();
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_EAT));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_EATENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_EAT>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_EATENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_EATENTRY[] m = new MAP_EATENTRY[0];
             if (!vmmi.VMMDLL_Map_GetEAT(hVMM, pid, wszModule, out pMap)) { goto fail; }
@@ -1517,8 +2024,8 @@ namespace vmmsharp
 
         public unsafe MAP_IATENTRY[] Map_GetIAT(uint pid, string wszModule)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_IAT));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_IATENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_IAT>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_IATENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_IATENTRY[] m = new MAP_IATENTRY[0];
             if (!vmmi.VMMDLL_Map_GetIAT(hVMM, pid, wszModule, out pMap)) { goto fail; }
@@ -1549,13 +2056,13 @@ namespace vmmsharp
         public unsafe MAP_HEAP Map_GetHeap(uint pid)
         {
             IntPtr pMap = IntPtr.Zero;
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HEAP));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HEAPENTRY));
-            int cbSEGENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HEAPSEGMENTENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HEAP>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HEAPENTRY>();
+            int cbSEGENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HEAPSEGMENTENTRY>();
             MAP_HEAP Heap;
             Heap.heaps = new MAP_HEAPENTRY[0];
             Heap.segments = new MAP_HEAPSEGMENTENTRY[0];
-            if(!vmmi.VMMDLL_Map_GetHeap(hVMM, pid, out pMap)) { goto fail; }
+            if (!vmmi.VMMDLL_Map_GetHeap(hVMM, pid, out pMap)) { goto fail; }
             vmmi.VMMDLL_MAP_HEAP nM = Marshal.PtrToStructure<vmmi.VMMDLL_MAP_HEAP>(pMap);
             if (nM.dwVersion != vmmi.VMMDLL_MAP_HEAP_VERSION) { goto fail; }
             Heap.heaps = new MAP_HEAPENTRY[nM.cMap];
@@ -1584,11 +2091,12 @@ namespace vmmsharp
         public unsafe MAP_HEAPALLOCENTRY[] Map_GetHeapAlloc(uint pid, ulong vaHeapOrHeapNum)
         {
             IntPtr pHeapAllocMap = IntPtr.Zero;
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HEAPALLOC));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HEAPALLOCENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HEAPALLOC>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HEAPALLOCENTRY>();
             if (!vmmi.VMMDLL_Map_GetHeapAlloc(hVMM, pid, vaHeapOrHeapNum, out pHeapAllocMap)) { return new MAP_HEAPALLOCENTRY[0]; }
             vmmi.VMMDLL_MAP_HEAPALLOC nM = Marshal.PtrToStructure<vmmi.VMMDLL_MAP_HEAPALLOC>(pHeapAllocMap);
-            if (nM.dwVersion != vmmi.VMMDLL_MAP_HEAPALLOC_VERSION) {
+            if (nM.dwVersion != vmmi.VMMDLL_MAP_HEAPALLOC_VERSION)
+            {
                 vmmi.VMMDLL_MemFree((byte*)pHeapAllocMap.ToPointer());
                 return new MAP_HEAPALLOCENTRY[0];
             }
@@ -1606,8 +2114,8 @@ namespace vmmsharp
 
         public unsafe MAP_THREADENTRY[] Map_GetThread(uint pid)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_THREAD));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_THREADENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_THREAD>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_THREADENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_THREADENTRY[] m = new MAP_THREADENTRY[0];
             if (!vmmi.VMMDLL_Map_GetThread(hVMM, pid, out pMap)) { goto fail; }
@@ -1635,6 +2143,7 @@ namespace vmmsharp
                 e.vaStackLimitUser = n.vaStackLimitUser;
                 e.vaStackBaseKernel = n.vaStackBaseKernel;
                 e.vaStackLimitKernel = n.vaStackLimitKernel;
+                e.vaImpersonationToken = n.vaImpersonationToken;
                 e.vaTrapFrame = n.vaTrapFrame;
                 e.vaRIP = n.vaRIP;
                 e.vaRSP = n.vaRSP;
@@ -1652,8 +2161,8 @@ namespace vmmsharp
 
         public unsafe MAP_HANDLEENTRY[] Map_GetHandle(uint pid)
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HANDLE));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_HANDLEENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HANDLE>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_HANDLEENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_HANDLEENTRY[] m = new MAP_HANDLEENTRY[0];
             if (!vmmi.VMMDLL_Map_GetHandle(hVMM, pid, out pMap)) { goto fail; }
@@ -1685,8 +2194,8 @@ namespace vmmsharp
 
         public unsafe MAP_NETENTRY[] Map_GetNet()
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_NET));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_NETENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_NET>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_NETENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_NETENTRY[] m = new MAP_NETENTRY[0];
             if (!vmmi.VMMDLL_Map_GetNet(hVMM, out pMap)) { goto fail; }
@@ -1721,8 +2230,8 @@ namespace vmmsharp
 
         public unsafe MAP_PHYSMEMENTRY[] Map_GetPhysMem()
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PHYSMEM));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PHYSMEMENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PHYSMEM>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PHYSMEMENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_PHYSMEMENTRY[] m = new MAP_PHYSMEMENTRY[0];
             if (!vmmi.VMMDLL_Map_GetPhysMem(hVMM, out pMap)) { goto fail; }
@@ -1744,13 +2253,14 @@ namespace vmmsharp
 
         public unsafe MAP_POOLENTRY[] Map_GetPool()
         {
-            byte[] tag = { 0, 0, 0, 0};
+            byte[] tag = { 0, 0, 0, 0 };
             IntPtr pN = IntPtr.Zero;
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_POOL));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_POOLENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_POOL>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_POOLENTRY>();
             if (!vmmi.VMMDLL_Map_GetPool(hVMM, out pN, 0)) { return new MAP_POOLENTRY[0]; }
             vmmi.VMMDLL_MAP_POOL nM = Marshal.PtrToStructure<vmmi.VMMDLL_MAP_POOL>(pN);
-            if (nM.dwVersion != vmmi.VMMDLL_MAP_POOL_VERSION) {
+            if (nM.dwVersion != vmmi.VMMDLL_MAP_POOL_VERSION)
+            {
                 vmmi.VMMDLL_MemFree((byte*)pN.ToPointer());
                 return new MAP_POOLENTRY[0];
             }
@@ -1775,8 +2285,8 @@ namespace vmmsharp
 
         public unsafe MAP_USERENTRY[] Map_GetUsers()
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_USER));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_USERENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_USER>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_USERENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_USERENTRY[] m = new MAP_USERENTRY[0];
             if (!vmmi.VMMDLL_Map_GetUsers(hVMM, out pMap)) { goto fail; }
@@ -1799,8 +2309,8 @@ namespace vmmsharp
 
         public unsafe MAP_SERVICEENTRY[] Map_GetServices()
         {
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_SERVICE));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_SERVICEENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_SERVICE>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_SERVICEENTRY>();
             IntPtr pMap = IntPtr.Zero;
             MAP_SERVICEENTRY[] m = new MAP_SERVICEENTRY[0];
             if (!vmmi.VMMDLL_Map_GetServices(hVMM, out pMap)) { goto fail; }
@@ -1839,8 +2349,8 @@ namespace vmmsharp
         {
             bool result;
             uint cbPfns;
-            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PFN));
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_MAP_PFNENTRY));
+            int cbMAP = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PFN>();
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_MAP_PFNENTRY>();
             if (pfns.Length == 0) { return new MAP_PFNENTRY[0]; }
             byte[] dataPfns = new byte[pfns.Length * sizeof(uint)];
             System.Buffer.BlockCopy(pfns, 0, dataPfns, 0, dataPfns.Length);
@@ -1922,7 +2432,7 @@ namespace vmmsharp
         {
             bool result;
             uint cHives;
-            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf(typeof(vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION));
+            int cbENTRY = System.Runtime.InteropServices.Marshal.SizeOf<vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION>();
             result = vmmi.VMMDLL_WinReg_HiveList(hVMM, null, 0, out cHives);
             if (!result || (cHives == 0)) { return new REGISTRY_HIVE_INFORMATION[0]; }
             fixed (byte* pb = new byte[cHives * cbENTRY])
@@ -1934,7 +2444,7 @@ namespace vmmsharp
                 {
                     vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION n = Marshal.PtrToStructure<vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION>((System.IntPtr)(pb + i * cbENTRY));
                     REGISTRY_HIVE_INFORMATION e;
-                    if(n.wVersion != vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION_VERSION) { return new REGISTRY_HIVE_INFORMATION[0]; }
+                    if (n.wVersion != vmmi.VMMDLL_REGISTRY_HIVE_INFORMATION_VERSION) { return new REGISTRY_HIVE_INFORMATION[0]; }
                     e.vaCMHIVE = n.vaCMHIVE;
                     e.vaHBASE_BLOCK = n.vaHBASE_BLOCK;
                     e.cbLength = n.cbLength;
@@ -1954,12 +2464,12 @@ namespace vmmsharp
             byte[] data = new byte[cb];
             fixed (byte* pb = data)
             {
-                if(!vmmi.VMMDLL_WinReg_HiveReadEx(hVMM, vaCMHIVE, ra, pb, cb, out cbRead, flags))
+                if (!vmmi.VMMDLL_WinReg_HiveReadEx(hVMM, vaCMHIVE, ra, pb, cb, out cbRead, flags))
                 {
                     return null;
                 }
             }
-            if(cbRead != cb)
+            if (cbRead != cb)
             {
                 Array.Resize<byte>(ref data, (int)cbRead);
             }
@@ -2017,7 +2527,7 @@ namespace vmmsharp
             bool result;
             uint cb = 0;
             result = vmmi.VMMDLL_WinReg_QueryValueExW(hVMM, wszFullPathKeyValue, out tp, null, ref cb);
-            if(!result)
+            if (!result)
             {
                 return null;
             }
@@ -2030,7 +2540,7 @@ namespace vmmsharp
         }
     }
 
-    public class VmmScatter : IDisposable
+    public sealed class VmmScatter : IDisposable
     {
         //---------------------------------------------------------------------
         // MEMORY NEW SCATTER READ/WRITE FUNCTIONALITY BELOW:
@@ -2059,7 +2569,7 @@ namespace vmmsharp
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
+        private void Dispose(bool disposing)
         {
             if (!this.disposed)
             {
@@ -2074,22 +2584,68 @@ namespace vmmsharp
             Dispose(disposing: true);
         }
 
-        public unsafe byte[] Read(ulong qwA, uint cb)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe byte[] Read(ulong qwA, uint cb) =>
+            ReadArray<byte>(qwA, cb);
+
+        public unsafe bool ReadStruct<T>(ulong qwA, out T result)
+            where T : unmanaged
         {
+            uint cb = (uint)sizeof(T);
             uint cbRead;
-            byte[] data = new byte[cb];
-            fixed (byte* pb = data)
+            result = default;
+            fixed (T* pb = &result)
             {
-                if (!vmmi.VMMDLL_Scatter_Read(hS, qwA, cb, pb, out cbRead))
+                if (!vmmi.VMMDLL_Scatter_Read(hS, qwA, cb, (byte*)pb, out cbRead))
+                    return false;
+            }
+            if (cbRead != cb)
+                return false;
+            return true;
+        }
+
+        public unsafe T[] ReadArray<T>(ulong qwA, uint count)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T) * count;
+            uint cbRead;
+            T[] data = new T[count];
+            fixed (T* pb = data)
+            {
+                if (!vmmi.VMMDLL_Scatter_Read(hS, qwA, cb, (byte*)pb, out cbRead))
                 {
                     return null;
                 }
             }
             if (cbRead != cb)
             {
-                Array.Resize<byte>(ref data, (int)cbRead);
+                int partialCount = (int)cbRead / sizeof(T);
+                Array.Resize<T>(ref data, partialCount);
             }
             return data;
+        }
+
+        /// <summary>
+        /// Read Memory from a Virtual Address into a Managed String.
+        /// </summary>
+        /// <param name="encoding">String Encoding for this read.</param>
+        /// <param name="qwA">Virtual Address to read from.</param>
+        /// <param name="cb">Number of bytes to read. Keep in mind some string encodings are 2-4 bytes per character.</param>
+        /// <param name="terminateOnNullChar">Terminate the string at the first occurrence of the null character.</param>
+        /// <returns>C# Managed System.String. Null if failed.</returns>
+        public unsafe string ReadString(Encoding encoding, ulong qwA, uint cb, bool terminateOnNullChar = true)
+        {
+            byte[] buffer = Read(qwA, cb);
+            if (buffer is null)
+                return null;
+            var result = encoding.GetString(buffer);
+            if (terminateOnNullChar)
+            {
+                int nullIndex = result.IndexOf('\0');
+                if (nullIndex != -1)
+                    result = result.Substring(0, nullIndex);
+            }
+            return result;
         }
 
         public bool Prepare(ulong qwA, uint cb)
@@ -2097,12 +2653,26 @@ namespace vmmsharp
             return vmmi.VMMDLL_Scatter_Prepare(hS, qwA, cb);
         }
 
-        public unsafe bool PrepareWrite(ulong qwA, byte[] data)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe bool PrepareWrite(ulong qwA, byte[] data) =>
+            PrepareWriteArray<byte>(qwA, data);
+
+        public unsafe bool PrepareWriteArray<T>(ulong qwA, T[] data)
+            where T : unmanaged
         {
-            fixed (byte* pb = data)
+            uint cb = (uint)sizeof(T) * (uint)data.Length;
+            fixed (T* pb = data)
             {
-                return vmmi.VMMDLL_Scatter_PrepareWrite(hS, qwA, pb, (uint)data.Length);
+                return vmmi.VMMDLL_Scatter_PrepareWrite(hS, qwA, (byte*)pb, cb);
             }
+        }
+
+        public unsafe bool PrepareWriteStruct<T>(ulong qwA, T value)
+            where T : unmanaged
+        {
+            uint cb = (uint)sizeof(T);
+            byte* pb = (byte*)&value;
+            return vmmi.VMMDLL_Scatter_PrepareWrite(hS, qwA, pb, cb);
         }
 
         public bool Execute()
@@ -2143,84 +2713,96 @@ namespace vmmsharp
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = 12)] internal ulong[] vStack;
         }
 
-        [DllImport("leechcore.dll", EntryPoint = "LcCreateEx")]
-        public static extern ulong LcCreateEx(ref lc.CONFIG pLcCreateConfig, out IntPtr ppLcCreateErrorInfo);
+        [DllImport("leechcore", EntryPoint = "LcCreate")]
+        public static extern IntPtr LcCreate(ref LeechCore.LC_CONFIG pLcCreateConfig);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcMemFree")]
+        [DllImport("leechcore", EntryPoint = "LcCreateEx")]
+        public static extern IntPtr LcCreateEx(ref LeechCore.LC_CONFIG pLcCreateConfig, out IntPtr ppLcCreateErrorInfo);
+
+        [DllImport("leechcore", EntryPoint = "LcClose")]
+        internal static extern void LcClose(IntPtr hLC);
+
+        [DllImport("leechcore", EntryPoint = "LcMemFree")]
         internal static extern unsafe void LcMemFree(IntPtr pv);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcAllocScatter1")]
+        [DllImport("leechcore", EntryPoint = "LcAllocScatter1")]
         internal static extern unsafe bool LcAllocScatter1(uint cMEMs, out IntPtr pppMEMs);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcRead")]
-        internal static extern unsafe bool LcRead(ulong hLC, ulong pa, uint cb, byte* pb);
+        [DllImport("leechcore", EntryPoint = "LcRead")]
+        internal static extern unsafe bool LcRead(IntPtr hLC, ulong pa, uint cb, byte* pb);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcReadScatter")]
-        internal static extern unsafe void LcReadScatter(ulong hLC, uint cMEMs, IntPtr ppMEMs);
+        [DllImport("leechcore", EntryPoint = "LcReadScatter")]
+        internal static extern unsafe void LcReadScatter(IntPtr hLC, uint cMEMs, IntPtr ppMEMs);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcWrite")]
-        internal static extern unsafe bool LcWrite(ulong hLC, ulong pa, uint cb, byte* pb);
+        [DllImport("leechcore", EntryPoint = "LcWrite")]
+        internal static extern unsafe bool LcWrite(IntPtr hLC, ulong pa, uint cb, byte* pb);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcWriteScatter")]
-        internal static extern unsafe void LcWriteScatter(ulong hLC, uint cMEMs, IntPtr ppMEMs);
+        [DllImport("leechcore", EntryPoint = "LcWriteScatter")]
+        internal static extern unsafe void LcWriteScatter(IntPtr hLC, uint cMEMs, IntPtr ppMEMs);
 
-        [DllImport("leechcore.dll", EntryPoint = "LcCommand")]
-        internal static extern unsafe bool LcCommand(ulong hLC, ulong fOption, uint cbDataIn, byte* pbDataIn, out IntPtr ppbDataOut, out uint pcbDataOut);
+        [DllImport("leechcore", EntryPoint = "LcGetOption")]
+        public static extern bool GetOption(IntPtr hLC, ulong fOption, out ulong pqwValue);
+
+        [DllImport("leechcore", EntryPoint = "LcSetOption")]
+        public static extern bool SetOption(IntPtr hLC, ulong fOption, ulong qwValue);
+
+        [DllImport("leechcore", EntryPoint = "LcCommand")]
+        internal static extern unsafe bool LcCommand(IntPtr hLC, ulong fOption, uint cbDataIn, byte* pbDataIn, out IntPtr ppbDataOut, out uint pcbDataOut);
     }
 
 
 
     internal static class vmmi
     {
-        internal static ulong MAX_PATH =                     260;
-        internal static uint VMMDLL_MAP_PTE_VERSION =        2;
-        internal static uint VMMDLL_MAP_VAD_VERSION =        6;
-        internal static uint VMMDLL_MAP_VADEX_VERSION =      3;
-        internal static uint VMMDLL_MAP_MODULE_VERSION =     6;
-        internal static uint VMMDLL_MAP_UNLOADEDMODULE_VERSION = 2;
-        internal static uint VMMDLL_MAP_EAT_VERSION =        3;
-        internal static uint VMMDLL_MAP_IAT_VERSION =        2;
-        internal static uint VMMDLL_MAP_HEAP_VERSION =       4;
-        internal static uint VMMDLL_MAP_HEAPALLOC_VERSION =  1;
-        internal static uint VMMDLL_MAP_THREAD_VERSION =     4;
-        internal static uint VMMDLL_MAP_HANDLE_VERSION =     3;
-        internal static uint VMMDLL_MAP_NET_VERSION =        3;
-        internal static uint VMMDLL_MAP_PHYSMEM_VERSION =    2;
-        internal static uint VMMDLL_MAP_POOL_VERSION =       2;
-        internal static uint VMMDLL_MAP_USER_VERSION =       2;
-        internal static uint VMMDLL_MAP_PFN_VERSION =        1;
-        internal static uint VMMDLL_MAP_SERVICE_VERSION =    3;
-        internal static uint VMMDLL_MEM_SEARCH_VERSION =     0xfe3e0002;
-        internal static uint VMMDLL_REGISTRY_HIVE_INFORMATION_VERSION = 4;
+        internal const ulong MAX_PATH = 260;
+        internal const uint VMMDLL_MAP_PTE_VERSION = 2;
+        internal const uint VMMDLL_MAP_VAD_VERSION = 6;
+        internal const uint VMMDLL_MAP_VADEX_VERSION = 4;
+        internal const uint VMMDLL_MAP_MODULE_VERSION = 6;
+        internal const uint VMMDLL_MAP_UNLOADEDMODULE_VERSION = 2;
+        internal const uint VMMDLL_MAP_EAT_VERSION = 3;
+        internal const uint VMMDLL_MAP_IAT_VERSION = 2;
+        internal const uint VMMDLL_MAP_HEAP_VERSION = 4;
+        internal const uint VMMDLL_MAP_HEAPALLOC_VERSION = 1;
+        internal const uint VMMDLL_MAP_THREAD_VERSION = 4;
+        internal const uint VMMDLL_MAP_HANDLE_VERSION = 3;
+        internal const uint VMMDLL_MAP_NET_VERSION = 3;
+        internal const uint VMMDLL_MAP_PHYSMEM_VERSION = 2;
+        internal const uint VMMDLL_MAP_POOL_VERSION = 2;
+        internal const uint VMMDLL_MAP_USER_VERSION = 2;
+        internal const uint VMMDLL_MAP_PFN_VERSION = 1;
+        internal const uint VMMDLL_MAP_SERVICE_VERSION = 3;
+        internal const uint VMMDLL_MEM_SEARCH_VERSION = 0xfe3e0002;
+        internal const uint VMMDLL_REGISTRY_HIVE_INFORMATION_VERSION = 4;
 
 
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_InitializeEx")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_InitializeEx")]
         internal static extern IntPtr VMMDLL_InitializeEx(
             int argc,
             string[] argv,
             out IntPtr ppLcErrorInfo);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_CloseAll")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_CloseAll")]
         public static extern void VMMDLL_CloseAll();
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Close")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Close")]
         public static extern void VMMDLL_Close(
             IntPtr hVMM);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ConfigGet")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ConfigGet")]
         public static extern bool VMMDLL_ConfigGet(
             IntPtr hVMM,
             ulong fOption,
             out ulong pqwValue);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ConfigSet")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ConfigSet")]
         public static extern bool VMMDLL_ConfigSet(
             IntPtr hVMM,
             ulong fOption,
             ulong qwValue);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemFree")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemFree")]
         internal static extern unsafe void VMMDLL_MemFree(
             byte* pvMem);
 
@@ -2228,8 +2810,8 @@ namespace vmmsharp
 
         // VFS (VIRTUAL FILE SYSTEM) FUNCTIONALITY BELOW:
 
-        internal static uint VMMDLL_VFS_FILELIST_EXINFO_VERSION = 1;
-        internal static uint VMMDLL_VFS_FILELIST_VERSION = 2;
+        internal const uint VMMDLL_VFS_FILELIST_EXINFO_VERSION = 1;
+        internal const uint VMMDLL_VFS_FILELIST_VERSION = 2;
 
         [System.Runtime.InteropServices.StructLayoutAttribute(System.Runtime.InteropServices.LayoutKind.Sequential)]
         internal struct VMMDLL_VFS_FILELIST
@@ -2241,13 +2823,13 @@ namespace vmmsharp
             internal ulong h;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_VfsListU")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_VfsListU")]
         internal static extern unsafe bool VMMDLL_VfsList(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string wcsPath,
             ref VMMDLL_VFS_FILELIST pFileList);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_VfsReadU")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_VfsReadU")]
         internal static extern unsafe uint VMMDLL_VfsRead(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string wcsFileName,
@@ -2256,7 +2838,7 @@ namespace vmmsharp
             out uint pcbRead,
             ulong cbOffset);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_VfsWriteU")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_VfsWriteU")]
         internal static extern unsafe uint VMMDLL_VfsWrite(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPUTF8Str)] string wcsFileName,
@@ -2269,14 +2851,14 @@ namespace vmmsharp
 
         // PLUGIN FUNCTIONALITY BELOW:
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_InitializePlugins")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_InitializePlugins")]
         public static extern bool VMMDLL_InitializePlugins(IntPtr hVMM);
 
 
 
         // MEMORY READ/WRITE FUNCTIONALITY BELOW:
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemReadScatter")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemReadScatter")]
         internal static extern unsafe uint VMMDLL_MemReadScatter(
             IntPtr hVMM,
             uint dwPID,
@@ -2284,7 +2866,7 @@ namespace vmmsharp
             uint cpMEMs,
             uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemReadEx")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemReadEx")]
         internal static extern unsafe bool VMMDLL_MemReadEx(
             IntPtr hVMM,
             uint dwPID,
@@ -2294,14 +2876,14 @@ namespace vmmsharp
             out uint pcbReadOpt,
             uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemPrefetchPages")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemPrefetchPages")]
         internal static extern unsafe bool VMMDLL_MemPrefetchPages(
             IntPtr hVMM,
             uint dwPID,
             byte* pPrefetchAddresses,
             uint cPrefetchAddresses);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemWrite")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemWrite")]
         internal static extern unsafe bool VMMDLL_MemWrite(
             IntPtr hVMM,
             uint dwPID,
@@ -2309,7 +2891,7 @@ namespace vmmsharp
             byte* pb,
             uint cb);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemVirt2Phys")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemVirt2Phys")]
         public static extern bool VMMDLL_MemVirt2Phys(
             IntPtr hVMM,
             uint dwPID,
@@ -2321,34 +2903,34 @@ namespace vmmsharp
 
         // MEMORY NEW SCATTER READ/WRITE FUNCTIONALITY BELOW:
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Initialize")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Initialize")]
         internal static extern unsafe IntPtr VMMDLL_Scatter_Initialize(
             IntPtr hVMM,
             uint dwPID,
             uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Prepare")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Prepare")]
         internal static extern unsafe bool VMMDLL_Scatter_Prepare(
             IntPtr hS,
             ulong va,
             uint cb);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_PrepareWrite")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_PrepareWrite")]
         internal static extern unsafe bool VMMDLL_Scatter_PrepareWrite(
             IntPtr hS,
             ulong va,
             byte* pb,
             uint cb);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_ExecuteRead")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_ExecuteRead")]
         internal static extern unsafe bool VMMDLL_Scatter_ExecuteRead(
             IntPtr hS);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Execute")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Execute")]
         internal static extern unsafe bool VMMDLL_Scatter_Execute(
             IntPtr hS);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Read")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Read")]
         internal static extern unsafe bool VMMDLL_Scatter_Read(
             IntPtr hS,
             ulong va,
@@ -2356,16 +2938,16 @@ namespace vmmsharp
             byte* pb,
             out uint pcbRead);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Clear")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Clear")]
         public static extern bool SVMMDLL_Scatter_Clear(IntPtr hS, uint dwPID, uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_Clear")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_Clear")]
         internal static extern unsafe bool VMMDLL_Scatter_Clear(
             IntPtr hS,
             uint dwPID,
             uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Scatter_CloseHandle")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Scatter_CloseHandle")]
         internal static extern unsafe void VMMDLL_Scatter_CloseHandle(
             IntPtr hS);
 
@@ -2373,20 +2955,20 @@ namespace vmmsharp
 
         // PROCESS FUNCTIONALITY BELOW:
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PidList")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PidList")]
         internal static extern unsafe bool VMMDLL_PidList(IntPtr hVMM, byte* pPIDs, ref ulong pcPIDs);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PidGetFromName")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PidGetFromName")]
         public static extern bool VMMDLL_PidGetFromName(IntPtr hVMM, [MarshalAs(UnmanagedType.LPStr)] string szProcName, out uint pdwPID);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetProcAddressW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetProcAddressW")]
         public static extern ulong VMMDLL_ProcessGetProcAddress(IntPtr hVMM, uint pid, [MarshalAs(UnmanagedType.LPWStr)] string wszModuleName, [MarshalAs(UnmanagedType.LPStr)] string szFunctionName);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetModuleBaseW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetModuleBaseW")]
         public static extern ulong VMMDLL_ProcessGetModuleBase(IntPtr hVMM, uint pid, [MarshalAs(UnmanagedType.LPWStr)] string wszModuleName);
 
-        internal static ulong VMMDLL_PROCESS_INFORMATION_MAGIC =        0xc0ffee663df9301e;
-        internal static ushort VMMDLL_PROCESS_INFORMATION_VERSION =     7;
+        internal const ulong VMMDLL_PROCESS_INFORMATION_MAGIC = 0xc0ffee663df9301e;
+        internal const ushort VMMDLL_PROCESS_INFORMATION_VERSION = 7;
 
         [System.Runtime.InteropServices.StructLayoutAttribute(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = CharSet.Ansi)]
         internal struct VMMDLL_PROCESS_INFORMATION
@@ -2415,14 +2997,14 @@ namespace vmmsharp
             internal uint IntegrityLevel;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetInformation")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetInformation")]
         internal static extern unsafe bool VMMDLL_ProcessGetInformation(
             IntPtr hVMM,
             uint dwPID,
             byte* pProcessInformation,
             ref ulong pcbProcessInformation);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetInformationString")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetInformationString")]
         internal static extern unsafe byte* VMMDLL_ProcessGetInformationString(
             IntPtr hVMM,
             uint dwPID,
@@ -2450,14 +3032,14 @@ namespace vmmsharp
             internal uint Size;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetDirectoriesW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetDirectoriesW")]
         internal static extern unsafe bool VMMDLL_ProcessGetDirectories(
             IntPtr hVMM,
             uint dwPID,
             [MarshalAs(UnmanagedType.LPWStr)] string wszModule,
             byte* pData);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_ProcessGetSectionsW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_ProcessGetSectionsW")]
         internal static extern unsafe bool VMMDLL_ProcessGetSections(
             IntPtr hVMM,
             uint dwPID,
@@ -2470,14 +3052,14 @@ namespace vmmsharp
 
         // WINDOWS SPECIFIC DEBUGGING / SYMBOL FUNCTIONALITY BELOW:
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PdbLoad")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PdbLoad")]
         internal static extern unsafe bool VMMDLL_PdbLoad(
             IntPtr hVMM,
             uint dwPID,
             ulong vaModuleBase,
             byte* pModuleMapEntry);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PdbSymbolName")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PdbSymbolName")]
         internal static extern unsafe bool VMMDLL_PdbSymbolName(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPStr)] string szModule,
@@ -2485,21 +3067,21 @@ namespace vmmsharp
             byte* szSymbolName,
             out uint pdwSymbolDisplacement);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PdbSymbolAddress")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PdbSymbolAddress")]
         public static extern bool VMMDLL_PdbSymbolAddress(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPStr)] string szModule,
             [MarshalAs(UnmanagedType.LPStr)] string szSymbolName,
             out ulong pvaSymbolAddress);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PdbTypeSize")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PdbTypeSize")]
         public static extern bool VMMDLL_PdbTypeSize(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPStr)] string szModule,
             [MarshalAs(UnmanagedType.LPStr)] string szTypeName,
             out uint pcbTypeSize);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_PdbTypeChildOffset")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_PdbTypeChildOffset")]
         public static extern bool VMMDLL_PdbTypeChildOffset(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPStr)] string szModule,
@@ -2535,7 +3117,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetPteW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetPteW")]
         internal static extern unsafe bool VMMDLL_Map_GetPte(
             IntPtr hVMM,
             uint dwPid,
@@ -2578,7 +3160,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetVadW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetVadW")]
         internal static extern unsafe bool VMMDLL_Map_GetVad(
             IntPtr hVMM,
             uint dwPid,
@@ -2593,7 +3175,9 @@ namespace vmmsharp
         internal struct VMMDLL_MAP_VADEXENTRY
         {
             internal uint tp;
-            internal uint iPML;
+            internal byte iPML;
+            internal byte pteFlags;
+            internal ushort _Reserved2;
             internal ulong va;
             internal ulong pa;
             internal ulong pte;
@@ -2612,7 +3196,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetVadEx")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetVadEx")]
         internal static extern unsafe bool VMMDLL_Map_GetVadEx(
             IntPtr hVMM,
             uint dwPid,
@@ -2677,7 +3261,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetModuleW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetModuleW")]
         internal static extern unsafe bool VMMDLL_Map_GetModule(
             IntPtr hVMM,
             uint dwPid,
@@ -2686,7 +3270,7 @@ namespace vmmsharp
 
         // VMMDLL_Map_GetModuleFromName
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetModuleFromNameW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetModuleFromNameW")]
         internal static extern unsafe bool VMMDLL_Map_GetModuleFromName(
             IntPtr hVMM,
             uint dwPID,
@@ -2721,7 +3305,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetUnloadedModuleW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetUnloadedModuleW")]
         internal static extern unsafe bool VMMDLL_Map_GetUnloadedModule(
             IntPtr hVMM,
             uint dwPid,
@@ -2759,7 +3343,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetEATW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetEATW")]
         internal static extern unsafe bool VMMDLL_Map_GetEAT(
             IntPtr hVMM,
             uint dwPid,
@@ -2797,7 +3381,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetIATW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetIATW")]
         internal static extern unsafe bool VMMDLL_Map_GetIAT(
             IntPtr hVMM,
             uint dwPid,
@@ -2837,7 +3421,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetHeap")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetHeap")]
         internal static extern unsafe bool VMMDLL_Map_GetHeap(
             IntPtr hVMM,
             uint dwPid,
@@ -2865,7 +3449,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetHeapAlloc")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetHeapAlloc")]
         internal static extern unsafe bool VMMDLL_Map_GetHeapAlloc(
             IntPtr hVMM,
             uint dwPid,
@@ -2904,7 +3488,8 @@ namespace vmmsharp
             internal byte bSuspendCount;
             internal byte bWaitReason;
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2)] internal byte[] _FutureUse1;
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 13)] internal uint[] _FutureUse2;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 11)] internal uint[] _FutureUse2;
+            internal ulong vaImpersonationToken;
             internal ulong vaWin32StartAddress;
         }
 
@@ -2916,7 +3501,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetThread")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetThread")]
         internal static extern unsafe bool VMMDLL_Map_GetThread(
             IntPtr hVMM,
             uint dwPid,
@@ -2954,7 +3539,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetHandleW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetHandleW")]
         internal static extern unsafe bool VMMDLL_Map_GetHandle(
             IntPtr hVMM,
             uint dwPid,
@@ -3002,7 +3587,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetNetW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetNetW")]
         internal static extern unsafe bool VMMDLL_Map_GetNet(
             IntPtr hVMM,
             out IntPtr ppNetMap);
@@ -3027,7 +3612,7 @@ namespace vmmsharp
             internal uint _Reserved2;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetPhysMem")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetPhysMem")]
         internal static extern unsafe bool VMMDLL_Map_GetPhysMem(
             IntPtr hVMM,
             out IntPtr ppPhysMemMap);
@@ -3061,7 +3646,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetPool")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetPool")]
         internal static extern unsafe bool VMMDLL_Map_GetPool(
             IntPtr hVMM,
             out IntPtr ppHeapAllocMap,
@@ -3091,7 +3676,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetUsersW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetUsersW")]
         internal static extern unsafe bool VMMDLL_Map_GetUsers(
             IntPtr hVMM,
             out IntPtr ppUserMap);
@@ -3136,7 +3721,7 @@ namespace vmmsharp
             internal uint cMap;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetServicesW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetServicesW")]
         internal static extern unsafe bool VMMDLL_Map_GetServices(
             IntPtr hVMM,
             out IntPtr ppServiceMap);
@@ -3168,7 +3753,7 @@ namespace vmmsharp
             internal uint _Reserved2;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_Map_GetPfn")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_Map_GetPfn")]
         internal static extern unsafe bool VMMDLL_Map_GetPfn(
             IntPtr hVMM,
             byte* pPfns,
@@ -3196,14 +3781,14 @@ namespace vmmsharp
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x10)] internal ulong[] _FutureReserved;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_HiveList")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_HiveList")]
         internal static extern unsafe bool VMMDLL_WinReg_HiveList(
             IntPtr hVMM,
             byte* pHives,
             uint cHives,
             out uint pcHives);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_HiveReadEx")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_HiveReadEx")]
         internal static extern unsafe bool VMMDLL_WinReg_HiveReadEx(
             IntPtr hVMM,
             ulong vaCMHive,
@@ -3213,7 +3798,7 @@ namespace vmmsharp
             out uint pcbReadOpt,
             uint flags);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_HiveWrite")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_HiveWrite")]
         internal static extern unsafe bool VMMDLL_WinReg_HiveWrite(
             IntPtr hVMM,
             ulong vaCMHive,
@@ -3221,7 +3806,7 @@ namespace vmmsharp
             byte* pb,
             uint cb);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_EnumKeyExW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_EnumKeyExW")]
         internal static extern unsafe bool VMMDLL_WinReg_EnumKeyExW(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPWStr)] string wszFullPathKey,
@@ -3230,7 +3815,7 @@ namespace vmmsharp
             ref uint lpcchName,
             out ulong lpftLastWriteTime);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_EnumValueW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_EnumValueW")]
         internal static extern unsafe bool VMMDLL_WinReg_EnumValueW(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPWStr)] string wszFullPathKey,
@@ -3241,7 +3826,7 @@ namespace vmmsharp
             byte* lpData,
             ref uint lpcbData);
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_WinReg_QueryValueExW")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_WinReg_QueryValueExW")]
         internal static extern unsafe bool VMMDLL_WinReg_QueryValueExW(
             IntPtr hVMM,
             [MarshalAs(UnmanagedType.LPWStr)] string wszFullPathKeyValue,
@@ -3286,7 +3871,7 @@ namespace vmmsharp
             internal IntPtr pfnFilterOptCB;
         }
 
-        [DllImport("vmm.dll", EntryPoint = "VMMDLL_MemSearch")]
+        [DllImport("vmm", EntryPoint = "VMMDLL_MemSearch")]
         internal static extern unsafe bool VMMDLL_MemSearch(
             IntPtr hVMM,
             uint dwPID,
