@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using Unispect;
-using vmmsharp;
+using Vmmsharp;
 
 namespace unispectDMAPlugin
 {
@@ -10,7 +10,7 @@ namespace unispectDMAPlugin
     {
         private const string MemMapPath = "mmap.txt";
         private readonly Vmm _vmm;
-        private uint _pid;
+        private VmmProcess _proc;
 
         public DMAMemoryPlugin()
         {
@@ -37,8 +37,8 @@ namespace unispectDMAPlugin
             try
             {
                 Log.Add($"[DMA] Module Search: '{moduleName}'");
-                var module = _vmm.Map_GetModuleFromName(_pid, moduleName);
-                Log.Add($"[DMA] Module Found: '{module.wszText}' | Base: 0x{module.vaBase.ToString("X")} | Size: {module.cbImageSize}");
+                var module = _proc.MapModuleFromName(moduleName);
+                Log.Add($"[DMA] Module Found: '{module.sText}' | Base: 0x{module.vaBase.ToString("X")} | Size: {module.cbImageSize}");
                 return new ModuleProxy(moduleName, module.vaBase, (int)module.cbImageSize);
             }
             catch (Exception ex)
@@ -54,8 +54,9 @@ namespace unispectDMAPlugin
                 Log.Add($"[DMA] Attaching to process '{handle}'");
                 // Slightly differs from Unispect's default Memory Plugin.
                 // Use 'ProcessName.exe' instead of 'ProcessName'.
-                if (!_vmm.PidGetFromName(handle, out _pid))
+                if (_vmm.Process(handle) is not VmmProcess proc)
                     throw new Exception("Process not found!");
+                _proc = proc;
                 return true;
 
             }
@@ -69,8 +70,7 @@ namespace unispectDMAPlugin
         {
             try
             {
-                // Fixed partial reads bug from original
-                return _vmm.MemRead(_pid, address, (uint)length);
+                return _proc.MemReadCustom(address, length);
             }
             catch (Exception ex)
             {
