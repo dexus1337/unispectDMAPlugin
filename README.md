@@ -1,5 +1,7 @@
 # UnispectDMAPlugin
 
+Updated for MemProcFS v5.11
+
 This is a plugin for Unispect, using the MemProcFS (PciLeech) Library.
 
 **NOTE ON THIS FORK:** The original Unispect branch by Razchek has a bug where Memory Plugins are not disposed after dumping. This causes the FPGA connection to remain open until the program is closed again. This may cause problems with running another dump, OR using the FPGA in other programs. I have fixed this in my own fork of Unispect: https://github.com/imerzan/Unispect
