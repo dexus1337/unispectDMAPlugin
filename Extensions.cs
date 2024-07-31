@@ -19,7 +19,7 @@ namespace unispectDMAPlugin
             var buffer = new byte[cb];
             fixed (byte* pb = buffer)
             {
-                if (!proc.MemRead(va, pb, (uint)cb, out var cbRead) || cbRead == 0)
+                if (!proc.MemRead(va, pb, (uint)cb, out _))
                     throw new Exception("Memory Read Failed!");
             }
             return buffer;
